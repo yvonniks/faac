@@ -99,7 +99,8 @@ enum flags
     HELP_MP4,
     HELP_ADVANCED,
     OPT_JOINT,
-    OPT_PNS
+    OPT_PNS,
+    OPT_SBR
 };
 
 typedef struct {
@@ -196,6 +197,7 @@ static help_t help_advanced[] = {
     {"--joint 1\tUse Mid/Side coding.\n"},
     {"--joint 2\tUse Intensity Stereo coding.\n"},
     {"--pns <0 .. 10>\tPNS level; 0=disabled.\n"},
+    {"--no-sbr       \tDisable pseudo-SBR\n"},
     {"--mpeg-vers X\tForce AAC MPEG version, X can be 2 or 4\n"},
     {"--shortctl X\tEnforce block type (0 = both (default); 1 = no short; 2 = no\n"
     "\t\tlong).\n"},
@@ -435,6 +437,7 @@ int main(int argc, char *argv[])
     unsigned int objectType = LOW;
     int jointmode = -1;
     int pnslevel = -1;
+    int useSbr = 1;
     static int useTns = 0;
     enum container_format container = NO_CONTAINER;
     enum stream_format stream = ADTS_STREAM;
@@ -525,6 +528,7 @@ int main(int argc, char *argv[])
             {"raw", 0, 0, 'r'},
             {"joint", required_argument, 0, OPT_JOINT},
             {"pns", required_argument, 0, OPT_PNS},
+            {"no-sbr", 0, 0, OPT_SBR},
             {"cutoff", 1, 0, 'c'},
             {"quality", 1, 0, 'q'},
             {"pcmraw", 0, 0, 'P'},
@@ -794,6 +798,9 @@ int main(int argc, char *argv[])
         case OPT_PNS:
             pnslevel = atoi(optarg);
             break;
+        case OPT_SBR:
+            useSbr = 0;
+            break;
         case '?':
         default:
             help('?');
@@ -945,6 +952,7 @@ int main(int argc, char *argv[])
 
     if (pnslevel >= 0)
         myFormat->pnslevel = pnslevel;
+    myFormat->useSbr = useSbr;
     if (quantqual > 0)
     {
         myFormat->quantqual = quantqual;

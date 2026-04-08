@@ -25,6 +25,7 @@
 #include "quantize.h"
 #include "huff2.h"
 #include "cpu_compute.h"
+#include "util.h"
 
 #ifdef __GNUC__
 #define GCC_VERSION (__GNUC__ * 10000 \
@@ -71,7 +72,7 @@ void QuantizeInit(void)
 
 // band sound masking
 static void bmask(CoderInfo * __restrict coderInfo, faac_real * __restrict xr0, faac_real * __restrict bandqual,
-                  faac_real * __restrict bandenrg, int gnum, faac_real quality)
+                  faac_real * __restrict bandenrg, int gnum, faac_real quality, AACQuantCfg *aacquantCfg)
 {
   int sfb, start, end, cnt;
   int *cb_offset = coderInfo->sfb_offset;
@@ -157,6 +158,20 @@ static void bmask(CoderInfo * __restrict coderInfo, faac_real * __restrict xr0, 
     target *= 10.0 / (1.0 + ((faac_real)(start+end)/last));
 
     bandqual[sfb] = target * quality;
+
+    if (aacquantCfg->use_sbr)
+    {
+        if (coderInfo->block_type == ONLY_SHORT_WINDOW)
+        {
+            if (sfb >= aacquantCfg->sbr_cbs)
+                bandqual[sfb] *= 0.1;
+        }
+        else
+        {
+            if (sfb >= aacquantCfg->sbr_cbl)
+                bandqual[sfb] *= 0.1;
+        }
+    }
   }
 }
 
@@ -265,7 +280,7 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
         for (cnt = 0; cnt < coder->groups.n; cnt++)
         {
             bmask(coder, gxr, bandlvl, bandenrg, cnt,
-                  (faac_real)aacquantCfg->quality/DEFQUAL);
+                  (faac_real)aacquantCfg->quality/DEFQUAL, aacquantCfg);
             qlevel(coder, gxr, bandlvl, bandenrg, cnt, aacquantCfg->pnslevel);
             gxr += coder->groups.len[cnt] * BLOCK_LEN_SHORT;
         }
@@ -321,6 +336,9 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
 
 void CalcBW(unsigned *bw, int rate, SR_INFO *sr, AACQuantCfg *aacquantCfg)
 {
+    if (aacquantCfg->use_sbr && rate <= 48000)
+        *bw = (unsigned)(*bw * 0.90);
+
     // find max short frame band
     int max = *bw * (BLOCK_LEN_SHORT << 1) / rate;
     int cnt;
@@ -350,6 +368,24 @@ void CalcBW(unsigned *bw, int rate, SR_INFO *sr, AACQuantCfg *aacquantCfg)
     aacquantCfg->max_l = l;
 
     *bw = (faac_real)l * rate / (BLOCK_LEN_LONG << 1);
+
+    if (aacquantCfg->use_sbr && rate <= 48000)
+    {
+        if (aacquantCfg->max_cbl < (sr->num_cb_long * 98 / 100))
+        {
+            aacquantCfg->sbr_cbl = aacquantCfg->max_cbl;
+            aacquantCfg->sbr_cbs = aacquantCfg->max_cbs;
+
+            aacquantCfg->max_cbl = min(sr->num_cb_long, aacquantCfg->sbr_cbl * 2);
+            aacquantCfg->max_cbs = min(sr->num_cb_short, aacquantCfg->sbr_cbs * 2);
+
+            l = 0;
+            for (cnt = 0; cnt < aacquantCfg->max_cbl; cnt++)
+                l += sr->cb_width_long[cnt];
+            aacquantCfg->max_l = l;
+            *bw = (faac_real)l * rate / (BLOCK_LEN_LONG << 1);
+        }
+    }
 }
 
 enum {MINSFB = 2};
