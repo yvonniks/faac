@@ -229,6 +229,7 @@ int FAACAPI faacEncSetConfiguration(faacEncHandle hpEncoder,
     if (config->pnslevel > 10)
         config->pnslevel = 10;
     hEncoder->aacquantCfg.pnslevel = config->pnslevel;
+    hEncoder->aacquantCfg.use_sbr = config->useSbr;
     /* set quantization quality */
     hEncoder->aacquantCfg.quality = config->quantqual;
     CalcBW(&hEncoder->config.bandWidth,
@@ -289,6 +290,7 @@ faacEncHandle FAACAPI faacEncOpen(unsigned long sampleRate,
     hEncoder->config.aacObjectType = LOW;
     hEncoder->config.jointmode = JOINT_IS;
     hEncoder->config.pnslevel = 4;
+    hEncoder->config.useSbr = 1;
     hEncoder->config.useLfe = 1;
     hEncoder->config.useTns = 0;
     hEncoder->config.bitRate = 64000;
@@ -548,6 +550,21 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
                 offset += hEncoder->srInfo->cb_width_short[sb];
             }
             coderInfo[channel].sfb_offset[sb] = offset;
+
+            if (hEncoder->aacquantCfg.use_sbr) {
+                int sbr_offset = coderInfo[channel].sfb_offset[hEncoder->aacquantCfg.sbr_cbs];
+                if (sbr_offset > 0) {
+                    int w;
+                    for (w = 0; w < MAX_SHORT_WINDOWS; w++) {
+                        faac_real *freq = hEncoder->freqBuff[channel] + w * BLOCK_LEN_SHORT;
+                        for (i = 0; i < BLOCK_LEN_SHORT - sbr_offset; i++) {
+                            int src = i % sbr_offset;
+                            freq[i + sbr_offset] = freq[src] * 0.08;
+                        }
+                    }
+                }
+            }
+
             BlocGroup(hEncoder->freqBuff[channel], coderInfo + channel, &hEncoder->aacquantCfg);
         } else {
             coderInfo[channel].sfbn = hEncoder->aacquantCfg.max_cbl;
@@ -561,6 +578,16 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
                 offset += hEncoder->srInfo->cb_width_long[sb];
             }
             coderInfo[channel].sfb_offset[sb] = offset;
+
+            if (hEncoder->aacquantCfg.use_sbr) {
+                int sbr_offset = coderInfo[channel].sfb_offset[hEncoder->aacquantCfg.sbr_cbl];
+                if (sbr_offset > 0) {
+                    for (i = 0; i < BLOCK_LEN_LONG - sbr_offset; i++) {
+                        int src = i % sbr_offset;
+                        hEncoder->freqBuff[channel][i + sbr_offset] = hEncoder->freqBuff[channel][src] * 0.08;
+                    }
+                }
+            }
         }
     }
 

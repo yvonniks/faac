@@ -1,0 +1,79 @@
+{
+  "sha": null,
+  "matrix": {
+    "voip_C_16_NOISE_FA.wav": {
+      "mos": 3.44946,
+      "size": 18030,
+      "bitrate": 16.628645816761182,
+      "bitrate_target": 16,
+      "time": 0.011886358261108398,
+      "md5": "c625e618bb66f3b09ee712d958c8aa5b",
+      "thresh": 2.5,
+      "scenario": "voip",
+      "filename": "C_16_NOISE_FA.wav"
+    },
+    "voip_C_06_CHOP_FA.wav": {
+      "mos": 3.52309,
+      "size": 21934,
+      "bitrate": 19.466201503673986,
+      "bitrate_target": 16,
+      "time": 0.011778831481933594,
+      "md5": "eb379ce0b45f1449653e16210d310119",
+      "thresh": 2.5,
+      "scenario": "voip",
+      "filename": "C_06_CHOP_FA.wav"
+    },
+    "voip_C_11_CHOP_FA.wav": {
+      "mos": 3.6195,
+      "size": 19196,
+      "bitrate": 18.885131844704322,
+      "bitrate_target": 16,
+      "time": 0.01720905303955078,
+      "md5": "cd41333baa02d9f784bd83d1df17b072",
+      "thresh": 2.5,
+      "scenario": "voip",
+      "filename": "C_11_CHOP_FA.wav"
+    },
+    "voip_C_01_CHOP_FA.wav": {
+      "mos": 3.52384,
+      "size": 21028,
+      "bitrate": 19.45165490656964,
+      "bitrate_target": 16,
+      "time": 0.01780247688293457,
+      "md5": "72f4abec40871a7565b8a3bfe5dbd1e5",
+      "thresh": 2.5,
+      "scenario": "voip",
+      "filename": "C_01_CHOP_FA.wav"
+    },
+    "music_low_12-German-male-speech.441.16b48k.wav": {
+      "mos": 3.29202,
+      "size": 67135,
+      "bitrate": 68.50382633180556,
+      "bitrate_target": 64,
+      "time": 0.03942584991455078,
+      "md5": "217fe11300699a1fdfd799f8383295d7",
+      "thresh": 3.5,
+      "scenario": "music_low",
+      "filename": "12-German-male-speech.441.16b48k.wav"
+    },
+    "music_std_12-German-male-speech.441.16b48k.wav": {
+      "mos": 4.61868,
+      "size": 135860,
+      "bitrate": 138.63007142979225,
+      "bitrate_target": 128,
+      "time": 0.044739723205566406,
+      "md5": "1ff8865a5b0426455cc4179d1f219bbc",
+      "thresh": 4.0,
+      "scenario": "music_std",
+      "filename": "12-German-male-speech.441.16b48k.wav"
+    }
+  },
+  "throughput": {
+    "noise.wav": 3.279258000999107,
+    "silence.wav": 2.938519790999635,
+    "sine.wav": 3.1226848186664333,
+    "sweep.wav": 2.750716078999782,
+    "overall": 3.0227946724162393
+  },
+  "lib_size": 78912
+}

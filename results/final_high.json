@@ -1,0 +1,24 @@
+{
+  "sha": null,
+  "matrix": {
+    "music_std_12-German-male-speech.441.16b48k.wav": {
+      "mos": 4.61868,
+      "size": 133752,
+      "bitrate": 136.47909107815084,
+      "bitrate_target": 128,
+      "time": 0.06918096542358398,
+      "md5": "368d03bdc5b7f4e8bb99804b89ef42f9",
+      "thresh": 4.0,
+      "scenario": "music_std",
+      "filename": "12-German-male-speech.441.16b48k.wav"
+    }
+  },
+  "throughput": {
+    "noise.wav": 3.7137907719989016,
+    "silence.wav": 2.856244312999479,
+    "sine.wav": 3.7472431493333715,
+    "sweep.wav": 3.0575955570002407,
+    "overall": 3.343718447832998
+  },
+  "lib_size": 78912
+}
