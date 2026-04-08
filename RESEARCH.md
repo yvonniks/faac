@@ -33,11 +33,13 @@ A coverage of 10% was used for the sweep.
 - Higher PNS levels leads to slightly improved encoding throughput (approx. 2% gain) because it simplifies the quantization process for noise-like bands.
 
 ## Proposed Logic
-Based on the transition observed around 11,000 Hz:
+Based on the transition observed around 12,000 Hz and subsequent verification:
 
 **Automatic Selection Rule:**
-- If `bandwidth <= 11000 Hz`: Set `PNS = 8`
+- If `bandwidth <= 12000 Hz`: Set `PNS = 8`
 - Otherwise: Set `PNS = 4`
+
+This logic targets the range where PNS provides the most benefit (up to ~32 kbps/channel) while reverting to the stable default for high-bitrate audio.
 
 ## Benchmark Results (Summary)
 

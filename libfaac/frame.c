@@ -224,7 +224,7 @@ int FAACAPI faacEncSetConfiguration(faacEncHandle hpEncoder,
 
     if (config->pnslevel == -1)
     {
-        if (config->bandWidth <= 11000)
+        if (config->bandWidth <= 12000)
             config->pnslevel = 8;
         else
             config->pnslevel = 4;
@@ -243,6 +243,7 @@ int FAACAPI faacEncSetConfiguration(faacEncHandle hpEncoder,
               hEncoder->sampleRate,
               hEncoder->srInfo,
               &hEncoder->aacquantCfg);
+
 
 
     // reset psymodel
