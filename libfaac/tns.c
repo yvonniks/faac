@@ -199,9 +199,8 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
         gain = LevinsonDurbin(order,length,&spec[startIndex],k);
 
         /* Initial check with a liberal threshold to avoid expensive quantization check. */
-        faac_real initial_threshold = 1.1;
-        if (br_per_ch < 40) initial_threshold = 1.5;
-        else if (br_per_ch > 80) initial_threshold = 1.2;
+        faac_real initial_threshold = 1.05;
+        if (br_per_ch < 16) initial_threshold = 10.0; /* Strict check for low bitrates */
 
         if (gain > initial_threshold) {  /* Use TNS */
             int truncatedOrder;
@@ -246,20 +245,20 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
                 pred_gain = (error > 0.0) ? 1.0 / error : 100.0;
 
                 /* Final decision thresholds for applying TNS. */
-                faac_real threshold = 1.4;
+                faac_real threshold = 1.05;
                 int target_order = truncatedOrder;
 
                 if (br_per_ch < 40) { /* 32 - 80 kbps stereo */
-                    /* Aggressive but careful: bits are limited */
-                    threshold = 1.4;
+                    /* Aggressive but extremely selective: bits are limited */
+                    threshold = 2.0;
                     target_order = min(truncatedOrder, 6);
                 } else if (br_per_ch < 80) { /* 80 - 160 kbps stereo */
                     /* Adaptive: standard prediction gain logic */
-                    threshold = 1.3;
-                    target_order = min(truncatedOrder, 10);
+                    threshold = 1.1;
+                    target_order = min(truncatedOrder, 12);
                 } else { /* > 160 kbps stereo */
                     /* Selective: Higher threshold to only engage for clear benefits */
-                    threshold = 1.5;
+                    threshold = 1.1;
                 }
 
                 /* Extra strictness for short blocks which are already time-domain tools */

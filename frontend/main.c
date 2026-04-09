@@ -599,7 +599,7 @@ int main(int argc, char *argv[])
                 unsigned int i;
                 if (sscanf(optarg, "%u", &i) > 0)
                 {
-                    mpegVersion = i;
+                    objectType = i;
                 }
                 break;
             }
