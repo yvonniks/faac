@@ -259,7 +259,7 @@ static void midside(CoderInfo *coder, ChannelInfo *channel,
 static void mixed_mode(CoderInfo *cl, CoderInfo *cr, ChannelInfo *channel,
                         faac_real *sl0, faac_real *sr0, int *sfcnt,
                         int wstart, int wend,
-                        faac_real thrmid, faac_real isthr, faac_real quality
+                        faac_real isthr, faac_real quality
                        )
 {
     int sfb;
@@ -431,7 +431,10 @@ void AACstereo(CoderInfo *coder,
         isthr += 1.0;
         break;
     case JOINT_MIXED:
-        isthr = 0.18 / (quality * quality);
+        if (quality > 0)
+            isthr = 0.18 / (quality * quality);
+        else
+            isthr = isthrmax;
         if (isthr > isthrmax)
             isthr = isthrmax;
         isthr += 1.0;
@@ -515,7 +518,7 @@ void AACstereo(CoderInfo *coder,
                 break;
             case JOINT_MIXED:
                 mixed_mode(coder + chn, coder + rch, channel + chn, s[chn], s[rch], &sfcnt,
-                           start, end, thrmid, isthr, quality);
+                           start, end, isthr, quality);
                 break;
             }
             start = end;

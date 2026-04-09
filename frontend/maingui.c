@@ -153,7 +153,29 @@ static DWORD WINAPI EncodeFile(LPVOID pParam)
             /* set encoder configuration */
             faacEncConfigurationPtr config = faacEncGetCurrentConfiguration(hEncoder);
 
-            config->jointmode = SendMessage(GetDlgItem(hWnd, IDC_JOINTMODE), CB_GETCURSEL, 0, 0);
+            {
+                int jointSel = (int)SendMessage(GetDlgItem(hWnd, IDC_JOINTMODE), CB_GETCURSEL, 0, 0);
+
+                switch (jointSel)
+                {
+                case 0: /* "None" */
+                    config->jointmode = JOINT_NONE;
+                    break;
+                case 1: /* "Mid/Side" */
+                    config->jointmode = JOINT_MS;
+                    break;
+                case 2: /* "Intensity Stereo" */
+                    config->jointmode = JOINT_IS;
+                    break;
+                case 3: /* "Mixed" */
+                    config->jointmode = JOINT_MIXED;
+                    break;
+                default:
+                    /* Fallback to a sensible default if the combo box selection is invalid */
+                    config->jointmode = JOINT_MIXED;
+                    break;
+                }
+            }
             config->useTns = IsDlgButtonChecked(hWnd, IDC_USETNS) == BST_CHECKED ? 1 : 0;
             config->useLfe = IsDlgButtonChecked(hWnd, IDC_USELFE) == BST_CHECKED ? 1 : 0;
             config->outputFormat = IsDlgButtonChecked(hWnd, IDC_USERAW) == BST_CHECKED ? 0 : 1;
