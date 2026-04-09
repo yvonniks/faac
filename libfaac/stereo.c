@@ -23,6 +23,14 @@
 #include "stereo.h"
 #include "huff2.h"
 
+/* RDO-lite bit estimation based on entropy of energy distribution. */
+static faac_real estimate_bits(faac_real energy, int len)
+{
+    if (energy <= 1.0) return 0;
+    /* Approximate bits as len * log2(sqrt(energy/len)).
+       bits ~ len * 1.6609 * log10(energy) */
+    return len * 1.6609 * FAAC_LOG10(energy);
+}
 
 static void stereo(CoderInfo *cl, CoderInfo *cr,
                    faac_real *sl0, faac_real *sr0, int *sfcnt,
@@ -248,6 +256,138 @@ static void midside(CoderInfo *coder, ChannelInfo *channel,
     }
 }
 
+static void mixed_mode(CoderInfo *cl, CoderInfo *cr, ChannelInfo *channel,
+                        faac_real *sl0, faac_real *sr0, int *sfcnt,
+                        int wstart, int wend,
+                        faac_real thrmid, faac_real isthr, faac_real quality
+                       )
+{
+    int sfb;
+    int win;
+    int sfmin;
+    const faac_real step = 10/1.50515;
+
+    if (cl->block_type == ONLY_SHORT_WINDOW)
+        sfmin = 1;
+    else
+        sfmin = 8;
+
+    for (sfb = 0; sfb < sfmin; sfb++)
+    {
+        channel->msInfo.ms_used[*sfcnt] = 0;
+        (*sfcnt)++;
+    }
+
+    for (sfb = sfmin; sfb < cl->sfbn; sfb++)
+    {
+        int l;
+        faac_real enrgs, enrgd, enrgl, enrgr;
+        faac_real dot = 0;
+        int start_off = cl->sfb_offset[sfb];
+        int end_off = cl->sfb_offset[sfb + 1];
+        int len = (end_off - start_off) * (wend - wstart);
+
+        enrgl = enrgr = 0.0;
+        for (win = wstart; win < wend; win++)
+        {
+            faac_real *sl = sl0 + win * BLOCK_LEN_SHORT;
+            faac_real *sr = sr0 + win * BLOCK_LEN_SHORT;
+
+            for (l = start_off; l < end_off; l++)
+            {
+                faac_real lx = sl[l];
+                faac_real rx = sr[l];
+                enrgl += lx * lx;
+                enrgr += rx * rx;
+                dot += lx * rx;
+            }
+        }
+
+        /* Derived energies for M/S */
+        enrgs = 0.25 * (enrgl + enrgr + 2.0 * dot);
+        enrgd = 0.25 * (enrgl + enrgr - 2.0 * dot);
+
+        faac_real correlation_sq = (enrgl > 0 && enrgr > 0) ? (dot * dot) / (enrgl * enrgr) : 1.0;
+
+        faac_real cost_lr = estimate_bits(enrgl, len) + estimate_bits(enrgr, len);
+        faac_real cost_ms = estimate_bits(enrgs, len) + estimate_bits(enrgd, len) + 1.0;
+
+        int use_is = 0;
+        int use_ms = 0;
+        int hcb = HCB_NONE;
+
+        /* Prefer M/S if it saves bits */
+        if (cost_ms < cost_lr) {
+            use_ms = 1;
+        }
+
+        /* Intensity Stereo evaluation with safety checks (correlation > 0.95) */
+        if (dot > 0 && correlation_sq > 0.9025) {
+            faac_real ethr = (sqrt(enrgl) + sqrt(enrgr));
+            ethr *= ethr * isthr;
+            faac_real enrgs_full = enrgs * 4.0;
+            faac_real enrgd_full = enrgd * 4.0;
+
+            if (enrgs_full >= ethr) hcb = HCB_INTENSITY;
+            else if (enrgd_full >= ethr) hcb = HCB_INTENSITY2;
+
+            if (hcb != HCB_NONE) {
+                faac_real energy_is = (hcb == HCB_INTENSITY) ? enrgs_full : enrgd_full;
+                /* Quality-aware penalty for IS to preserve spatial imaging: 1.0 at q=0, 1.1 at q=1000 */
+                faac_real is_penalty = 1.0 + 0.1 * (quality / 1000.0);
+                faac_real cost_is = (estimate_bits(energy_is, len) + 12.0) * is_penalty;
+
+                if (cost_is < cost_lr && (!use_ms || cost_is < cost_ms)) {
+                    use_is = 1;
+                    use_ms = 0;
+                }
+            }
+        }
+
+        if (use_is) {
+            faac_real efix = enrgl + enrgr;
+            int sf = FAAC_LRINT(FAAC_LOG10(enrgl / efix) * step);
+            int pan = FAAC_LRINT(FAAC_LOG10(enrgr/efix) * step) - sf;
+            if (pan <= 30 && pan >= -30) {
+                cl->sf[*sfcnt] = sf;
+                cr->sf[*sfcnt] = -pan;
+                cl->book[*sfcnt] = hcb;
+                channel->msInfo.ms_used[*sfcnt] = 0;
+
+                faac_real energy_base = (hcb == HCB_INTENSITY) ? enrgs * 4.0 : enrgd * 4.0;
+                faac_real vfix = sqrt(efix / energy_base);
+                for (win = wstart; win < wend; win++) {
+                    faac_real *sl = sl0 + win * BLOCK_LEN_SHORT;
+                    faac_real *sr = sr0 + win * BLOCK_LEN_SHORT;
+                    for (l = start_off; l < end_off; l++) {
+                        faac_real val = (hcb == HCB_INTENSITY) ? (sl[l] + sr[l]) : (sl[l] - sr[l]);
+                        sl[l] = val * vfix;
+                    }
+                }
+                (*sfcnt)++;
+                continue;
+            }
+        }
+
+        if (use_ms) {
+            for (win = wstart; win < wend; win++) {
+                faac_real *sl = sl0 + win * BLOCK_LEN_SHORT;
+                faac_real *sr = sr0 + win * BLOCK_LEN_SHORT;
+                for (l = start_off; l < end_off; l++) {
+                    faac_real L = sl[l];
+                    faac_real R = sr[l];
+                    sl[l] = 0.5 * (L + R);
+                    sr[l] = 0.5 * (L - R);
+                }
+            }
+            channel->msInfo.ms_used[*sfcnt] = 1;
+        } else {
+            channel->msInfo.ms_used[*sfcnt] = 0;
+        }
+        (*sfcnt)++;
+    }
+}
+
 
 void AACstereo(CoderInfo *coder,
                ChannelInfo *channel,
@@ -288,6 +428,12 @@ void AACstereo(CoderInfo *coder,
         if (isthr > isthrmax)
             isthr = isthrmax;
 
+        isthr += 1.0;
+        break;
+    case JOINT_MIXED:
+        isthr = 0.18 / (quality * quality);
+        if (isthr > isthrmax)
+            isthr = isthrmax;
         isthr += 1.0;
         break;
     }
@@ -349,7 +495,7 @@ void AACstereo(CoderInfo *coder,
                 goto skip;
             }
 
-        if (mode == JOINT_MS)
+        if (mode == JOINT_MS || mode == JOINT_MIXED)
         {
             channel[chn].common_window = 1;
             channel[chn].msInfo.is_present = 1;
@@ -366,6 +512,10 @@ void AACstereo(CoderInfo *coder,
                 break;
             case JOINT_IS:
                 stereo(coder + chn, coder + rch, s[chn], s[rch], &sfcnt, start, end, isthr);
+                break;
+            case JOINT_MIXED:
+                mixed_mode(coder + chn, coder + rch, channel + chn, s[chn], s[rch], &sfcnt,
+                           start, end, thrmid, isthr, quality);
                 break;
             }
             start = end;
