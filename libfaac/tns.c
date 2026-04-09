@@ -28,6 +28,7 @@ Copyright (c) 1997.
  */
 
 #include <math.h>
+#include <string.h>
 #include "frame.h"
 #include "coder.h"
 #include "bitstream.h"
@@ -107,19 +108,13 @@ void TnsInit(faacEncStruct* hEncoder)
         case LOW :
             tnsInfo->tnsMaxBandsLong = tnsMaxBandsLongMainLow[fsIndex];
             tnsInfo->tnsMaxBandsShort = tnsMaxBandsShortMainLow[fsIndex];
-            if (hEncoder->config.mpegVersion == 1) { /* MPEG2 */
-                tnsInfo->tnsMaxOrderLong = tnsMaxOrderLongLow;
-            } else { /* MPEG4 */
-                if (fsIndex <= 5) /* fs > 32000Hz */
-                    tnsInfo->tnsMaxOrderLong = 12;
-                else
-                    tnsInfo->tnsMaxOrderLong = 20;
-            }
+            tnsInfo->tnsMaxOrderLong = tnsMaxOrderLongLow;
             tnsInfo->tnsMaxOrderShort = tnsMaxOrderShortMainLow;
             break;
         }
         tnsInfo->tnsMinBandNumberLong = tnsMinBandNumberLong[fsIndex];
         tnsInfo->tnsMinBandNumberShort = tnsMinBandNumberShort[fsIndex];
+        tnsInfo->bitRate = hEncoder->config.bitRate;
     }
 }
 
@@ -145,10 +140,6 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
     switch( blockType ) {
     case ONLY_SHORT_WINDOW :
 
-        /* TNS not used for short blocks currently */
-        tnsInfo->tnsDataPresent = 0;
-        return;
-
         numberOfWindows = MAX_SHORT_WINDOWS;
         windowSize = BLOCK_LEN_SHORT;
         startBand = tnsInfo->tnsMinBandNumberShort;
@@ -161,7 +152,7 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
 
     default:
         numberOfWindows = 1;
-        windowSize = BLOCK_LEN_SHORT;
+        windowSize = BLOCK_LEN_LONG;
         startBand = tnsInfo->tnsMinBandNumberLong;
         stopBand = numberOfBands;
         lengthInBands = stopBand - startBand;
@@ -180,32 +171,116 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
 
     tnsInfo->tnsDataPresent = 0;     /* default TNS not used */
 
+    /* Bitrate per channel in kbps */
+    int br_per_ch = tnsInfo->bitRate / 1000;
+
+    /* Logic per requirements:
+       < 32 kbps stereo (16 kbps mono): Off
+       32 - 80 kbps stereo (16 - 40 kbps mono): Aggressive, low-order
+       80 - 160 kbps stereo (40 - 80 kbps mono): Adaptive based on gain
+       > 160 kbps stereo (> 80 kbps mono): Selective for transients
+    */
+    if (br_per_ch < 16) return; /* < 32 kbps stereo: Off. Bits are too precious. */
+
     /* Perform analysis and filtering for each window */
     for (w=0;w<numberOfWindows;w++) {
 
         TnsWindowData* windowData = &tnsInfo->windowData[w];
         TnsFilterData* tnsFilter = windowData->tnsFilter;
         faac_real* k = tnsFilter->kCoeffs;    /* reflection coeffs */
-        faac_real* a = tnsFilter->aCoeffs;    /* prediction coeffs */
 
         windowData->numFilters=0;
         windowData->coefResolution = DEF_TNS_COEFF_RES;
         startIndex = w * windowSize + sfbOffsetTable[startBand];
         length = sfbOffsetTable[stopBand] - sfbOffsetTable[startBand];
+
+        if (length <= 0) continue;
+
         gain = LevinsonDurbin(order,length,&spec[startIndex],k);
 
-        if (gain>DEF_TNS_GAIN_THRESH) {  /* Use TNS */
+        /* Initial check with a liberal threshold to avoid expensive quantization check. */
+        faac_real initial_threshold = 1.1;
+        if (br_per_ch < 40) initial_threshold = 1.5;
+        else if (br_per_ch > 80) initial_threshold = 1.2;
+
+        if (gain > initial_threshold) {  /* Use TNS */
             int truncatedOrder;
-            windowData->numFilters++;
-            tnsInfo->tnsDataPresent=1;
-            tnsFilter->direction = 0;
-            tnsFilter->coefCompress = 0;
-            tnsFilter->length = lengthInBands;
-            QuantizeReflectionCoeffs(order,DEF_TNS_COEFF_RES,k,tnsFilter->index);
-            truncatedOrder = TruncateCoeffs(order,DEF_TNS_COEFF_THRESH,k);
-            tnsFilter->order = truncatedOrder;
-            StepUp(truncatedOrder,k,a);    /* Compute predictor coefficients */
-            TnsInvFilter(length,&spec[startIndex],tnsFilter,temp);      /* Filter */
+            faac_real pred_gain;
+            faac_real k_quant[TNS_MAX_ORDER+1];
+            int index_quant[TNS_MAX_ORDER+1];
+
+            truncatedOrder = TruncateCoeffs(order, DEF_TNS_COEFF_THRESH, k);
+
+            if (truncatedOrder > 0) {
+                /* Evaluate prediction gain after quantization */
+                int i;
+                faac_real error = 1.0;
+                int can_compress = 1;
+
+                for (i=1; i<=truncatedOrder; i++) {
+                    /* Clamp k to avoid NaN in asin during quantization */
+                    if (k[i] > 0.999) k[i] = 0.999;
+                    if (k[i] < -0.999) k[i] = -0.999;
+                    k_quant[i] = k[i];
+                }
+
+                /* Try 4-bit quantization */
+                QuantizeReflectionCoeffs(truncatedOrder, DEF_TNS_COEFF_RES, k_quant, index_quant);
+
+                /* Check if we can use 3 bits instead */
+                for (i=1; i<=truncatedOrder; i++) {
+                    if (index_quant[i] < -4 || index_quant[i] > 3) {
+                        can_compress = 0;
+                        break;
+                    }
+                }
+
+                if (can_compress) {
+                    QuantizeReflectionCoeffs(truncatedOrder, DEF_TNS_COEFF_RES - 1, k_quant, index_quant);
+                }
+
+                for (i=1; i<=truncatedOrder; i++) {
+                    error *= (1.0 - k_quant[i] * k_quant[i]);
+                }
+
+                pred_gain = (error > 0.0) ? 1.0 / error : 100.0;
+
+                /* Final decision thresholds for applying TNS. */
+                faac_real threshold = 1.4;
+                int target_order = truncatedOrder;
+
+                if (br_per_ch < 40) { /* 32 - 80 kbps stereo */
+                    /* Aggressive but careful: bits are limited */
+                    threshold = 1.4;
+                    target_order = min(truncatedOrder, 6);
+                } else if (br_per_ch < 80) { /* 80 - 160 kbps stereo */
+                    /* Adaptive: standard prediction gain logic */
+                    threshold = 1.3;
+                    target_order = min(truncatedOrder, 10);
+                } else { /* > 160 kbps stereo */
+                    /* Selective: Higher threshold to only engage for clear benefits */
+                    threshold = 1.5;
+                }
+
+                /* Extra strictness for short blocks which are already time-domain tools */
+                if (blockType == ONLY_SHORT_WINDOW) threshold *= 1.5;
+
+                if (pred_gain > threshold && target_order > 1) {
+                    windowData->numFilters++;
+                    tnsInfo->tnsDataPresent = 1;
+                    tnsFilter->direction = 0;
+                    tnsFilter->coefCompress = can_compress;
+                    windowData->coefResolution = can_compress ? (DEF_TNS_COEFF_RES - 1) : DEF_TNS_COEFF_RES;
+                    tnsFilter->length = lengthInBands;
+                    tnsFilter->order = target_order;
+                    for (i=1; i<=target_order; i++) {
+                        tnsFilter->index[i] = index_quant[i];
+                        tnsFilter->kCoeffs[i] = k_quant[i];
+                    }
+                    StepUp(target_order, tnsFilter->kCoeffs, tnsFilter->aCoeffs);    /* Compute predictor coefficients */
+                    TnsInvFilter(length, &spec[startIndex], tnsFilter, temp);      /* Filter */
+                }
+            }
         }
     }
 }
@@ -288,6 +363,8 @@ static void TnsInvFilter(int length,faac_real* spec,TnsFilterData* filter, faac_
     int order=filter->order;
     faac_real* a=filter->aCoeffs;
 
+    if (order > length) order = length;
+
     /* Determine loop parameters for given direction */
     if (filter->direction) {
 
@@ -367,12 +444,16 @@ static void QuantizeReflectionCoeffs(int fOrder,
     faac_real iqfac,iqfac_m;
     int i;
 
-    iqfac = ((1<<(coeffRes-1))-0.5)/(M_PI/2);
-    iqfac_m = ((1<<(coeffRes-1))+0.5)/(M_PI/2);
+    iqfac = ((1<<(coeffRes-1))-0.5)/(M_PI/2.0);
+    iqfac_m = ((1<<(coeffRes-1))+0.5)/(M_PI/2.0);
 
     /* Quantize and inverse quantize */
     for (i=1;i<=fOrder;i++) {
-        indexArray[i] = (kArray[i]>=0)?(int)(0.5+(FAAC_ASIN(kArray[i])*iqfac)):(int)(-0.5+(FAAC_ASIN(kArray[i])*iqfac_m));
+        faac_real val = kArray[i];
+        if (val > 0.999) val = 0.999;
+        if (val < -0.999) val = -0.999;
+        val = FAAC_ASIN(val);
+        indexArray[i] = (val>=0)?(int)(0.5+(val*iqfac)):(int)(-0.5+(val*iqfac_m));
         kArray[i] = FAAC_SIN((faac_real)indexArray[i]/((indexArray[i]>=0)?iqfac:iqfac_m));
     }
 }
@@ -391,10 +472,9 @@ static void Autocorrelation(int maxOrder,        /* Maximum autocorr order */
 
     for (order=0;order<=maxOrder;order++) {
         rArray[order]=0.0;
-        for (index=0;index<dataSize;index++) {
+        for (index=0;index<dataSize-order;index++) {
             rArray[order]+=data[index]*data[index+order];
         }
-        dataSize--;
     }
 }
 
