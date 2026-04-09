@@ -22,7 +22,7 @@
 #ifndef _FAACCFG_H_
 #define _FAACCFG_H_
 
-#define FAAC_CFG_VERSION 105
+#define FAAC_CFG_VERSION 106
 
 /* MPEG ID's */
 #define MPEG2 1
@@ -127,6 +127,13 @@ typedef struct faacEncConfiguration
 	*/
     int channel_map[64];
     int pnslevel;
+
+    /* PseudoSBR: reduce encoded bandwidth at low bitrates so the ABR
+     * controller can redistribute the freed bits as quantization quality
+     * in the retained lower bands.  Enabled by default; disable with
+     * --no-sbr.  Has no effect when bitRate >= 64 kbps/ch.
+     * See RESEARCH.md for the derivation of the scaling constants. */
+    unsigned int usePseudoSBR;
 } faacEncConfiguration, *faacEncConfigurationPtr;
 
 #pragma pack(pop)
