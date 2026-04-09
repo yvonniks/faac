@@ -224,10 +224,12 @@ int FAACAPI faacEncSetConfiguration(faacEncHandle hpEncoder,
 
     if (config->pnslevel == -1)
     {
-        if (config->bandWidth <= 12000)
+        if (config->bandWidth <= 8000)
             config->pnslevel = 8;
-        else
+        else if (config->bandWidth >= 15000)
             config->pnslevel = 4;
+        else
+            config->pnslevel = 8 - (int)((config->bandWidth - 8000) / 1750);
     }
 
     if (config->mpegVersion == MPEG2)
