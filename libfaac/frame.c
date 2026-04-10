@@ -291,7 +291,7 @@ faacEncHandle FAACAPI faacEncOpen(unsigned long sampleRate,
     hEncoder->config.jointmode = JOINT_IS;
     hEncoder->config.pnslevel = 4;
     hEncoder->config.useLfe = 1;
-    hEncoder->config.useTns = 1;
+    hEncoder->config.useTns = -1;
     hEncoder->config.bitRate = 64000;
     hEncoder->config.bandWidth = CalcBandwidth(hEncoder->config.bitRate, sampleRate);
     hEncoder->config.quantqual = 0;
@@ -392,7 +392,7 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
     CoderInfo *coderInfo = hEncoder->coderInfo;
     unsigned int numChannels = hEncoder->numChannels;
     unsigned int useLfe = hEncoder->config.useLfe;
-    unsigned int useTns = hEncoder->config.useTns;
+    int useTns = hEncoder->config.useTns;
     unsigned int jointmode = hEncoder->config.jointmode;
     unsigned int bandWidth = hEncoder->config.bandWidth;
     unsigned int shortctl = hEncoder->config.shortctl;
@@ -566,7 +566,7 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
 
     /* Perform TNS analysis and filtering before grouping for short blocks */
     for (channel = 0; channel < numChannels; channel++) {
-        if ((channelInfo[channel].type != ELEMENT_LFE) && (useTns)) {
+        if ((channelInfo[channel].type != ELEMENT_LFE) && (useTns != 0)) {
             TnsEncode(&(coderInfo[channel].tnsInfo),
                       coderInfo[channel].sfbn,
                       coderInfo[channel].sfbn,

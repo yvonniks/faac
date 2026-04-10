@@ -1,0 +1,8 @@
+usage: run_benchmark.py [-h] [--coverage COVERAGE] [--skip-mos]
+                        [--visqol-image VISQOL_IMAGE] [--sha SHA]
+                        [--scenarios SCENARIOS]
+                        [--include-tests INCLUDE_TESTS]
+                        [--exclude-tests EXCLUDE_TESTS]
+                        [--extra-args EXTRA_ARGS]
+                        faac_bin lib_path name output
+run_benchmark.py: error: argument --extra-args: expected one argument

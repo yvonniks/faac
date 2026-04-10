@@ -82,7 +82,7 @@ typedef struct faacEncConfiguration
     unsigned int useLfe;
 
     /* Use Temporal Noise Shaping */
-    unsigned int useTns;
+    int useTns;
 
     /* bitrate / channel of AAC file */
     unsigned long bitRate;

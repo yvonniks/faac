@@ -1,0 +1,299 @@
+{
+  "sha": null,
+  "matrix": {
+    "vss_C_03_CHOP_FA.wav": {
+      "mos": 3.78267,
+      "size": 38754,
+      "bitrate": 34.8157393122782,
+      "bitrate_target": 40,
+      "time": 0.010372638702392578,
+      "md5": "8a849daa29e39b73ca8b68b738d504c2",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_03_CHOP_FA.wav"
+    },
+    "vss_C_01_CHOP_FA.wav": {
+      "mos": 4.10265,
+      "size": 37696,
+      "bitrate": 34.87015328885529,
+      "bitrate_target": 40,
+      "time": 0.014592647552490234,
+      "md5": "359d4f2fcff8eaa72ca3c44f834581f0",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_01_CHOP_FA.wav"
+    },
+    "vss_C_02_CHOP_FA.wav": {
+      "mos": 4.02919,
+      "size": 36162,
+      "bitrate": 34.31234988880652,
+      "bitrate_target": 40,
+      "time": 0.010889530181884766,
+      "md5": "1da771209287960f28aaebf0c82cba41",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_02_CHOP_FA.wav"
+    },
+    "vss_C_04_CHOP_FA.wav": {
+      "mos": 3.79005,
+      "size": 40837,
+      "bitrate": 35.06709145560052,
+      "bitrate_target": 40,
+      "time": 0.022742033004760742,
+      "md5": "d922f23f04eede69597f5a716b6aa8f9",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_04_CHOP_FA.wav"
+    },
+    "vss_C_05_CHOP_FA.wav": {
+      "mos": 3.78834,
+      "size": 45549,
+      "bitrate": 36.4392,
+      "bitrate_target": 40,
+      "time": 0.010956764221191406,
+      "md5": "20cdc26014dde80e9068ce7089c69ca5",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_05_CHOP_FA.wav"
+    },
+    "vss_C_07_CHOP_FA.wav": {
+      "mos": 3.98472,
+      "size": 39743,
+      "bitrate": 34.729474733407066,
+      "bitrate_target": 40,
+      "time": 0.01572108268737793,
+      "md5": "e135c3845f97f536860395bb6d7a3bb7",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_07_CHOP_FA.wav"
+    },
+    "vss_C_08_CHOP_FA.wav": {
+      "mos": 4.25805,
+      "size": 39540,
+      "bitrate": 36.06096025986874,
+      "bitrate_target": 40,
+      "time": 0.010748147964477539,
+      "md5": "421d61d62fa48a23d9bfd43b82ebe0df",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_08_CHOP_FA.wav"
+    },
+    "vss_C_06_CHOP_FA.wav": {
+      "mos": 3.9769,
+      "size": 39375,
+      "bitrate": 34.944911288737266,
+      "bitrate_target": 40,
+      "time": 0.01130056381225586,
+      "md5": "47745c711a643aaae75c21db398283b8",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_06_CHOP_FA.wav"
+    },
+    "vss_C_09_CHOP_FA.wav": {
+      "mos": 3.9958,
+      "size": 34348,
+      "bitrate": 34.94784480828948,
+      "bitrate_target": 40,
+      "time": 0.008558511734008789,
+      "md5": "4345cb8efe8ebf61d6c67459cdbd58b9",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_09_CHOP_FA.wav"
+    },
+    "vss_C_11_CHOP_FA.wav": {
+      "mos": 4.3308,
+      "size": 33414,
+      "bitrate": 32.872879530055755,
+      "bitrate_target": 40,
+      "time": 0.008742809295654297,
+      "md5": "edda392c6d97a9180c73a3a2a24215b6",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_11_CHOP_FA.wav"
+    },
+    "vss_C_10_CHOP_FA.wav": {
+      "mos": 3.79385,
+      "size": 38121,
+      "bitrate": 34.564134530926815,
+      "bitrate_target": 40,
+      "time": 0.010325431823730469,
+      "md5": "2be0a648516913b3066cfefaca422a5a",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_10_CHOP_FA.wav"
+    },
+    "vss_C_12_CHOP_FA.wav": {
+      "mos": 4.26671,
+      "size": 39424,
+      "bitrate": 34.78628009312901,
+      "bitrate_target": 40,
+      "time": 0.010041475296020508,
+      "md5": "68522dc1bd36cc4f73a14c73351ad606",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_12_CHOP_FA.wav"
+    },
+    "vss_C_13_CHOP_FA.wav": {
+      "mos": 3.95114,
+      "size": 39597,
+      "bitrate": 35.11296468208333,
+      "bitrate_target": 40,
+      "time": 0.01480555534362793,
+      "md5": "d3d2a251559563d4e0b1e48721cce593",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_13_CHOP_FA.wav"
+    },
+    "vss_C_15_CHOP_FA.wav": {
+      "mos": 4.32315,
+      "size": 35307,
+      "bitrate": 35.384403382399,
+      "bitrate_target": 40,
+      "time": 0.009699106216430664,
+      "md5": "c6bdc18040edc24902b2ded86a44b5d4",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_15_CHOP_FA.wav"
+    },
+    "vss_C_14_CHOP_FA.wav": {
+      "mos": 4.31288,
+      "size": 34043,
+      "bitrate": 35.097852804339624,
+      "bitrate_target": 40,
+      "time": 0.01819634437561035,
+      "md5": "9544896c1f3e869f5f914226129fc4f1",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_14_CHOP_FA.wav"
+    },
+    "vss_C_16_NOISE_FA.wav": {
+      "mos": 4.30939,
+      "size": 45555,
+      "bitrate": 42.014307275793435,
+      "bitrate_target": 40,
+      "time": 0.012916326522827148,
+      "md5": "781fa544117b46ee3252e91cd0a5cb73",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_16_NOISE_FA.wav"
+    },
+    "vss_C_18_ECHO_FA.wav": {
+      "mos": 4.21914,
+      "size": 49355,
+      "bitrate": 39.484,
+      "bitrate_target": 40,
+      "time": 0.018100976943969727,
+      "md5": "5be9d198bc636362fdc4c1d1c66dfe04",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_18_ECHO_FA.wav"
+    },
+    "vss_C_21_NOISE_FA.wav": {
+      "mos": 3.99851,
+      "size": 41019,
+      "bitrate": 35.179245283018865,
+      "bitrate_target": 40,
+      "time": 0.010483264923095703,
+      "md5": "e1f41e2faf30e25a2ae800eb651e668e",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_21_NOISE_FA.wav"
+    },
+    "vss_C_23_ECHO_FA.wav": {
+      "mos": 4.05926,
+      "size": 37447,
+      "bitrate": 35.128517823639775,
+      "bitrate_target": 40,
+      "time": 0.014977455139160156,
+      "md5": "b8f23f30f3eba2499bfcf5f0eefb70b6",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_23_ECHO_FA.wav"
+    },
+    "vss_C_20_CHOP_FA.wav": {
+      "mos": 4.0942,
+      "size": 39958,
+      "bitrate": 34.89162675835346,
+      "bitrate_target": 40,
+      "time": 0.02131366729736328,
+      "md5": "163653ee5b2b4cdeeacf9e6dcfb84ef6",
+      "thresh": 3.0,
+      "scenario": "vss",
+      "filename": "C_20_CHOP_FA.wav"
+    },
+    "music_low_12-German-male-speech.441.16b48k.wav": {
+      "mos": 3.24751,
+      "size": 67135,
+      "bitrate": 68.50382633180556,
+      "bitrate_target": 64,
+      "time": 0.044234514236450195,
+      "md5": "217fe11300699a1fdfd799f8383295d7",
+      "thresh": 3.5,
+      "scenario": "music_low",
+      "filename": "12-German-male-speech.441.16b48k.wav"
+    },
+    "music_low_Shinsho_pool_3min45_4min4.16b48k.wav": {
+      "mos": 4.28266,
+      "size": 80137,
+      "bitrate": 64.1096,
+      "bitrate_target": 64,
+      "time": 0.04509615898132324,
+      "md5": "15e5e446c3b394bb46a53ad0e59e3cac",
+      "thresh": 3.5,
+      "scenario": "music_low",
+      "filename": "Shinsho_pool_3min45_4min4.16b48k.wav"
+    },
+    "music_std_12-German-male-speech.441.16b48k.wav": {
+      "mos": 4.28052,
+      "size": 135860,
+      "bitrate": 138.63007142979225,
+      "bitrate_target": 128,
+      "time": 0.03801274299621582,
+      "md5": "1ff8865a5b0426455cc4179d1f219bbc",
+      "thresh": 4.0,
+      "scenario": "music_std",
+      "filename": "12-German-male-speech.441.16b48k.wav"
+    },
+    "music_std_Shinsho_pool_3min45_4min4.16b48k.wav": {
+      "mos": 4.60502,
+      "size": 158665,
+      "bitrate": 126.932,
+      "bitrate_target": 128,
+      "time": 0.04140305519104004,
+      "md5": "66f34751636f132b54abc2922e8859d1",
+      "thresh": 4.0,
+      "scenario": "music_std",
+      "filename": "Shinsho_pool_3min45_4min4.16b48k.wav"
+    },
+    "music_high_12-German-male-speech.441.16b48k.wav": {
+      "mos": 4.65026,
+      "size": 265019,
+      "bitrate": 270.42251509091795,
+      "bitrate_target": 256,
+      "time": 0.04192471504211426,
+      "md5": "05bda297b93aa5691105bd2df10e9918",
+      "thresh": 4.3,
+      "scenario": "music_high",
+      "filename": "12-German-male-speech.441.16b48k.wav"
+    },
+    "music_high_Shinsho_pool_3min45_4min4.16b48k.wav": {
+      "mos": 4.70448,
+      "size": 318955,
+      "bitrate": 255.164,
+      "bitrate_target": 256,
+      "time": 0.0493011474609375,
+      "md5": "cfc7bc08f9074145d4a47c189e8a01ad",
+      "thresh": 4.3,
+      "scenario": "music_high",
+      "filename": "Shinsho_pool_3min45_4min4.16b48k.wav"
+    }
+  },
+  "throughput": {
+    "noise.wav": 3.425914474001426,
+    "silence.wav": 2.74772169199908,
+    "sine.wav": 3.6059661206648648,
+    "sweep.wav": 4.795308291002584,
+    "overall": 3.643727644416989
+  },
+  "lib_size": 82968
+}

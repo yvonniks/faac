@@ -1,0 +1,91 @@
+Starting Phase 1 (Encoding) for no_tns_v15...
+Parallelizing across 4 threads.
+  [Scenario: voip] Processing 20 samples (coverage 5%)...
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_04_CHOP_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_04_CHOP_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_08_CHOP_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_08_CHOP_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_13_CHOP_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_13_CHOP_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_15_CHOP_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_15_CHOP_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_03_CHOP_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_03_CHOP_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_06_CHOP_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_06_CHOP_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_10_CHOP_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_10_CHOP_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_12_CHOP_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_12_CHOP_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_18_ECHO_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_18_ECHO_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_21_NOISE_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_21_NOISE_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_02_CHOP_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_02_CHOP_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_07_CHOP_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_07_CHOP_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_23_ECHO_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_23_ECHO_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_01_CHOP_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_01_CHOP_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_05_CHOP_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_05_CHOP_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_09_CHOP_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_09_CHOP_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_11_CHOP_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_11_CHOP_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_14_CHOP_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_14_CHOP_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_16_NOISE_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_16_NOISE_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+ failed: Command '['./build/frontend/faac', '-o', '/opt/faac-benchmark/output/voip_C_20_CHOP_FA.wav_no_tns_v15.aac', '/opt/faac-benchmark/data/external/speech/C_20_CHOP_FA.wav', '-b', '16', '-v0', '--no-tns']' returned non-zero exit status 127.
+  [Scenario: vss] Processing 20 samples (coverage 5%)...
+    (1/20) C_03_CHOP_FA.wav done.
+    (2/20) C_01_CHOP_FA.wav done.
+    (3/20) C_02_CHOP_FA.wav done.
+    (4/20) C_04_CHOP_FA.wav done.
+    (5/20) C_05_CHOP_FA.wav done.
+    (6/20) C_07_CHOP_FA.wav done.
+    (7/20) C_08_CHOP_FA.wav done.
+    (8/20) C_06_CHOP_FA.wav done.
+    (9/20) C_09_CHOP_FA.wav done.
+    (10/20) C_11_CHOP_FA.wav done.
+    (11/20) C_10_CHOP_FA.wav done.
+    (12/20) C_12_CHOP_FA.wav done.
+    (13/20) C_13_CHOP_FA.wav done.
+    (14/20) C_15_CHOP_FA.wav done.
+    (15/20) C_14_CHOP_FA.wav done.
+    (16/20) C_16_NOISE_FA.wav done.
+    (17/20) C_18_ECHO_FA.wav done.
+    (18/20) C_21_NOISE_FA.wav done.
+    (19/20) C_23_ECHO_FA.wav done.
+    (20/20) C_20_CHOP_FA.wav done.
+  [Scenario: music_low] Processing 2 samples (coverage 5%)...
+    (1/2) 12-German-male-speech.441.16b48k.wav done.
+    (2/2) Shinsho_pool_3min45_4min4.16b48k.wav done.
+  [Scenario: music_std] Processing 2 samples (coverage 5%)...
+    (1/2) 12-German-male-speech.441.16b48k.wav done.
+    (2/2) Shinsho_pool_3min45_4min4.16b48k.wav done.
+  [Scenario: music_high] Processing 2 samples (coverage 5%)...
+    (1/2) 12-German-male-speech.441.16b48k.wav done.
+    (2/2) Shinsho_pool_3min45_4min4.16b48k.wav done.
+Measuring throughput for no_tns_v15...
+  Benchmarking throughput with noise.wav...
+  Benchmarking throughput with silence.wav...
+  Benchmarking throughput with sine.wav...
+  Benchmarking throughput with sweep.wav...
+Computing MOS for 26 samples using local ViSQOL (Binary, 4 cores)...
+  (1/26) vss_C_04_CHOP_FA.wav: 3.79
+  (2/26) vss_C_02_CHOP_FA.wav: 4.03
+  (3/26) vss_C_01_CHOP_FA.wav: 4.10
+  (4/26) vss_C_03_CHOP_FA.wav: 3.78
+  (5/26) vss_C_05_CHOP_FA.wav: 3.79
+  (6/26) vss_C_07_CHOP_FA.wav: 3.98
+  (7/26) vss_C_08_CHOP_FA.wav: 4.26
+  (8/26) vss_C_06_CHOP_FA.wav: 3.98
+  (9/26) vss_C_09_CHOP_FA.wav: 4.00
+  (10/26) vss_C_11_CHOP_FA.wav: 4.33
+  (11/26) vss_C_10_CHOP_FA.wav: 3.79
+  (12/26) vss_C_12_CHOP_FA.wav: 4.27
+  (13/26) vss_C_13_CHOP_FA.wav: 3.95
+  (14/26) vss_C_15_CHOP_FA.wav: 4.32
+  (15/26) vss_C_14_CHOP_FA.wav: 4.31
+  (16/26) vss_C_16_NOISE_FA.wav: 4.31
+  (17/26) vss_C_21_NOISE_FA.wav: 4.00
+  (18/26) vss_C_18_ECHO_FA.wav: 4.22
+  (19/26) vss_C_23_ECHO_FA.wav: 4.06
+  (20/26) vss_C_20_CHOP_FA.wav: 4.09
+  (21/26) music_low_12-German-male-speech.441.16b48k.wav: 3.25
+  (22/26) music_std_12-German-male-speech.441.16b48k.wav: 4.28
+  (23/26) music_low_Shinsho_pool_3min45_4min4.16b48k.wav: 4.28
+  (24/26) music_std_Shinsho_pool_3min45_4min4.16b48k.wav: 4.61
+  (25/26) music_high_12-German-male-speech.441.16b48k.wav: 4.65
+  (26/26) music_high_Shinsho_pool_3min45_4min4.16b48k.wav: 4.70
+Phase 2 (MOS) complete.
+>>> Phase 1: Encoding and Basic Metrics
+>>> Phase 2: Perceptual Quality (MOS)
+Found local visqol binary at: /opt/visqol/bazel-bin/visqol
+Using local ViSQOL installation...
+>>> Benchmark complete.

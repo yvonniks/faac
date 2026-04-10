@@ -28,7 +28,6 @@ Copyright (c) 1997.
  */
 
 #include <math.h>
-#include <string.h>
 #include "frame.h"
 #include "coder.h"
 #include "bitstream.h"
@@ -115,6 +114,7 @@ void TnsInit(faacEncStruct* hEncoder)
         tnsInfo->tnsMinBandNumberLong = tnsMinBandNumberLong[fsIndex];
         tnsInfo->tnsMinBandNumberShort = tnsMinBandNumberShort[fsIndex];
         tnsInfo->bitRate = hEncoder->config.bitRate;
+        tnsInfo->useTns = hEncoder->config.useTns;
     }
 }
 
@@ -180,7 +180,8 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
        80 - 160 kbps stereo (40 - 80 kbps mono): Adaptive based on gain
        > 160 kbps stereo (> 80 kbps mono): Selective for transients
     */
-    if (br_per_ch < 16) return; /* < 32 kbps stereo: Off. Bits are too precious. */
+    if (tnsInfo->useTns == 0) return;
+    if (tnsInfo->useTns == -1 && br_per_ch < 48) return; /* < 96 kbps stereo: Off. Bits are too precious. */
 
     /* Perform analysis and filtering for each window */
     for (w=0;w<numberOfWindows;w++) {
@@ -199,8 +200,7 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
         gain = LevinsonDurbin(order,length,&spec[startIndex],k);
 
         /* Initial check with a liberal threshold to avoid expensive quantization check. */
-        faac_real initial_threshold = 1.05;
-        if (br_per_ch < 16) initial_threshold = 10.0; /* Strict check for low bitrates */
+        faac_real initial_threshold = (br_per_ch < 80) ? 1.2 : 1.01;
 
         if (gain > initial_threshold) {  /* Use TNS */
             int truncatedOrder;
@@ -248,16 +248,12 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
                 faac_real threshold = 1.05;
                 int target_order = truncatedOrder;
 
-                if (br_per_ch < 40) { /* 32 - 80 kbps stereo */
+                if (br_per_ch < 80) { /* < 160 kbps stereo */
                     /* Aggressive but extremely selective: bits are limited */
-                    threshold = 2.0;
-                    target_order = min(truncatedOrder, 6);
-                } else if (br_per_ch < 80) { /* 80 - 160 kbps stereo */
-                    /* Adaptive: standard prediction gain logic */
-                    threshold = 1.1;
+                    threshold = 1.4;
                     target_order = min(truncatedOrder, 12);
-                } else { /* > 160 kbps stereo */
-                    /* Selective: Higher threshold to only engage for clear benefits */
+                } else { /* >= 160 kbps stereo */
+                    /* Selective: engage for clear temporal shaping benefits */
                     threshold = 1.1;
                 }
 

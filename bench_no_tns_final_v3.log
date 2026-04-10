@@ -1,0 +1,168 @@
+Starting Phase 1 (Encoding) for no_tns_final_v3...
+Parallelizing across 4 threads.
+  [Scenario: voip] Processing 40 samples (coverage 10%)...
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+ failed: [Errno 13] Permission denied: './build/frontend/faac'
+    (1/40) C_01_CHOP_FA.wav done.
+    (2/40) C_02_CHOP_FA.wav done.
+    (5/40) C_01_COMPSPKR_MK.wav done.
+    (39/40) C_02_COMPSPKR_MK.wav done.
+    (40/40) C_03_CHOP_FA.wav done.
+  [Scenario: vss] Processing 40 samples (coverage 10%)...
+    (1/40) C_01_COMPSPKR_MK.wav done.
+    (2/40) C_02_COMPSPKR_MK.wav done.
+    (3/40) C_01_CHOP_FA.wav done.
+    (4/40) C_02_CHOP_FA.wav done.
+    (5/40) C_03_CHOP_FA.wav done.
+    (6/40) C_03_COMPSPKR_MK.wav done.
+    (7/40) C_04_COMPSPKR_MK.wav done.
+    (8/40) C_04_CHOP_FA.wav done.
+    (9/40) C_05_COMPSPKR_MK.wav done.
+    (10/40) C_05_CHOP_FA.wav done.
+    (11/40) C_06_CHOP_FA.wav done.
+    (12/40) C_06_COMPSPKR_MK.wav done.
+    (13/40) C_07_CHOP_FA.wav done.
+    (14/40) C_07_COMPSPKR_MK.wav done.
+    (15/40) C_08_COMPSPKR_MK.wav done.
+    (16/40) C_08_CHOP_FA.wav done.
+    (17/40) C_09_CHOP_FA.wav done.
+    (18/40) C_10_CHOP_FA.wav done.
+    (19/40) C_09_COMPSPKR_MK.wav done.
+    (20/40) C_10_COMPSPKR_MK.wav done.
+    (21/40) C_11_CHOP_FA.wav done.
+    (22/40) C_11_COMPSPKR_MK.wav done.
+    (23/40) C_12_CHOP_FA.wav done.
+    (24/40) C_12_COMPSPKR_MK.wav done.
+    (25/40) C_13_CHOP_FA.wav done.
+    (26/40) C_14_CHOP_FA.wav done.
+    (27/40) C_13_COMPSPKR_MK.wav done.
+    (28/40) C_14_COMPSPKR_MK.wav done.
+    (29/40) C_15_CHOP_FA.wav done.
+    (30/40) C_15_NOISE_MK.wav done.
+    (31/40) C_16_NOISE_FA.wav done.
+    (32/40) C_17_ECHO_MK.wav done.
+    (33/40) C_18_ECHO_FA.wav done.
+    (34/40) C_19_CHOP_MK.wav done.
+    (35/40) C_20_NOISE_MK.wav done.
+    (36/40) C_20_CHOP_FA.wav done.
+    (37/40) C_21_NOISE_FA.wav done.
+    (38/40) C_22_ECHO_MK.wav done.
+    (39/40) C_23_ECHO_FA.wav done.
+    (40/40) C_24_CHOP_MK.wav done.
+  [Scenario: music_low] Processing 4 samples (coverage 10%)...
+    (1/4) 12-German-male-speech.441.16b48k.wav done.
+    (2/4) Coral.16b48k.wav done.
+    (3/4) cst.wav done.
+    (4/4) Shinsho_pool_3min45_4min4.16b48k.wav done.
+  [Scenario: music_std] Processing 4 samples (coverage 10%)...
+    (1/4) 12-German-male-speech.441.16b48k.wav done.
+    (2/4) Coral.16b48k.wav done.
+    (3/4) cst.wav done.
+    (4/4) Shinsho_pool_3min45_4min4.16b48k.wav done.
+  [Scenario: music_high] Processing 4 samples (coverage 10%)...
+    (1/4) cst.wav done.
+    (2/4) 12-German-male-speech.441.16b48k.wav done.
+    (3/4) Shinsho_pool_3min45_4min4.16b48k.wav done.
+    (4/4) Coral.16b48k.wav done.
+Measuring throughput for no_tns_final_v3...
+  Benchmarking throughput with noise.wav...
+  Benchmarking throughput with silence.wav...
+  Benchmarking throughput with sine.wav...
+  Benchmarking throughput with sweep.wav...
+Computing MOS for 57 samples using local ViSQOL (Binary, 4 cores)...
+  (1/57) voip_C_02_COMPSPKR_MK.wav: 3.50
+  (2/57) voip_C_01_COMPSPKR_MK.wav: 3.50
+  (3/57) voip_C_02_CHOP_FA.wav: 3.68
+  (4/57) voip_C_01_CHOP_FA.wav: 3.60
+  (5/57) vss_C_01_COMPSPKR_MK.wav: 4.19
+  (6/57) vss_C_02_COMPSPKR_MK.wav: 4.41
+  (7/57) voip_C_03_CHOP_FA.wav: 2.96
+  (8/57) vss_C_01_CHOP_FA.wav: 4.10
+  (9/57) vss_C_02_CHOP_FA.wav: 4.03
+  (10/57) vss_C_03_COMPSPKR_MK.wav: 3.97
+  (11/57) vss_C_03_CHOP_FA.wav: 3.78
+  (12/57) vss_C_04_COMPSPKR_MK.wav: 4.42
+  (13/57) vss_C_04_CHOP_FA.wav: 3.79
+  (14/57) vss_C_05_COMPSPKR_MK.wav: 3.96
+  (15/57) vss_C_05_CHOP_FA.wav: 3.79
+  (16/57) vss_C_06_CHOP_FA.wav: 3.98
+  (17/57) vss_C_06_COMPSPKR_MK.wav: 4.15
+  (18/57) vss_C_07_CHOP_FA.wav: 3.92
+  (19/57) vss_C_08_COMPSPKR_MK.wav: 4.64
+  (20/57) vss_C_07_COMPSPKR_MK.wav: 3.94
+  (21/57) vss_C_08_CHOP_FA.wav: 4.26
+  (22/57) vss_C_09_CHOP_FA.wav: 4.00
+  (23/57) vss_C_10_CHOP_FA.wav: 3.79
+  (24/57) vss_C_09_COMPSPKR_MK.wav: 4.30
+  (25/57) vss_C_10_COMPSPKR_MK.wav: 4.45
+  (26/57) vss_C_11_CHOP_FA.wav: 4.33
+  (27/57) vss_C_11_COMPSPKR_MK.wav: 4.14
+  (28/57) vss_C_12_CHOP_FA.wav: 4.27
+  (29/57) vss_C_12_COMPSPKR_MK.wav: 4.25
+  (30/57) vss_C_14_CHOP_FA.wav: 4.31
+  (31/57) vss_C_13_CHOP_FA.wav: 3.95
+  (32/57) vss_C_13_COMPSPKR_MK.wav: 3.92
+  (33/57) vss_C_14_COMPSPKR_MK.wav: 4.27
+  (34/57) vss_C_15_CHOP_FA.wav: 4.32
+  (35/57) vss_C_15_NOISE_MK.wav: 4.25
+  (36/57) vss_C_16_NOISE_FA.wav: 4.31
+  (37/57) vss_C_17_ECHO_MK.wav: 4.50
+  (38/57) vss_C_19_CHOP_MK.wav: 3.97
+  (39/57) vss_C_18_ECHO_FA.wav: 4.22
+  (40/57) vss_C_20_NOISE_MK.wav: 4.24
+  (41/57) vss_C_20_CHOP_FA.wav: 4.09
+  (42/57) vss_C_21_NOISE_FA.wav: 4.00
+  (43/57) vss_C_22_ECHO_MK.wav: 4.21
+  (44/57) vss_C_23_ECHO_FA.wav: 4.06
+  (45/57) vss_C_24_CHOP_MK.wav: 4.23
+  (46/57) music_low_cst.wav: 3.50
+  (47/57) music_low_12-German-male-speech.441.16b48k.wav: 3.25
+  (48/57) music_low_Coral.16b48k.wav: 3.43
+  (49/57) music_low_Shinsho_pool_3min45_4min4.16b48k.wav: 4.28
+  (50/57) music_std_12-German-male-speech.441.16b48k.wav: 4.28
+  (51/57) music_std_cst.wav: 4.32
+  (52/57) music_std_Coral.16b48k.wav: 4.57
+  (53/57) music_high_cst.wav: 4.27
+  (54/57) music_std_Shinsho_pool_3min45_4min4.16b48k.wav: 4.11
+  (55/57) music_high_12-German-male-speech.441.16b48k.wav: 4.65
+  (56/57) music_high_Shinsho_pool_3min45_4min4.16b48k.wav: 4.70
+  (57/57) music_high_Coral.16b48k.wav: 4.64
+Phase 2 (MOS) complete.
+>>> Phase 1: Encoding and Basic Metrics
+>>> Phase 2: Perceptual Quality (MOS)
+Found local visqol binary at: /opt/visqol/bazel-bin/visqol
+Using local ViSQOL installation...
+>>> Benchmark complete.
