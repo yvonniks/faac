@@ -163,6 +163,7 @@ static void bmask(CoderInfo * __restrict coderInfo, faac_real * __restrict xr0, 
 enum {MAXSHORTBAND = 36};
 // use band quality levels to quantize a group of windows
 
+
 static void qlevel(CoderInfo * __restrict coderInfo,
                    const faac_real * __restrict xr0,
                    const faac_real * __restrict bandqual,
@@ -174,12 +175,13 @@ static void qlevel(CoderInfo * __restrict coderInfo,
 {
     int sb;
 #if !defined(__clang__) && defined(__GNUC__) && (GCC_VERSION >= 40600)
+    /* 2^0.25 (1.50515 dB) step from AAC specs */
     static const faac_real sfstep = 1.0 / FAAC_LOG10(FAAC_SQRT(FAAC_SQRT(2.0)));
 #else
     static const faac_real sfstep = 20 / 1.50515;
 #endif
     int gsize = coderInfo->groups.len[gnum];
-    faac_real pnsthr = 0.1 * pnslevel;
+    faac_real pnsthr = (faac_real)0.1 * pnslevel;
 
     for (sb = 0; sb < coderInfo->sfbn; sb++)
     {
@@ -212,7 +214,7 @@ static void qlevel(CoderInfo * __restrict coderInfo,
 
       if (!final_pass) {
           etot = bandenrg[sb] / (faac_real)gsize;
-          rmsx = FAAC_SQRT(etot / (end - start));
+          rmsx = FAAC_SQRT(etot / (faac_real)(end - start));
 
           if ((rmsx < NOISEFLOOR) || (!bandqual[sb]))
           {
@@ -231,18 +233,17 @@ static void qlevel(CoderInfo * __restrict coderInfo,
 
           sfac = FAAC_LRINT(FAAC_LOG10(bandqual[sb] / rmsx) * sfstep);
           coderInfo->sf[coderInfo->bandcnt] = SF_OFFSET - sfac;
-          // Initial quantization to find best book and fill coder->s
-          if ((SF_OFFSET - sfac) < 10) sfacfix = 0.0;
-          else sfacfix = FAAC_POW(10, sfac / sfstep);
+          if ((SF_OFFSET - sfac) < 10) sfacfix = (faac_real)0.0;
+          else sfacfix = FAAC_POW(10, (faac_real)sfac / sfstep);
       } else {
           sfac = SF_OFFSET - coderInfo->sf[coderInfo->bandcnt];
-          if (coderInfo->sf[coderInfo->bandcnt] < 10) sfacfix = 0.0;
-          else sfacfix = FAAC_POW(10, sfac / sfstep);
+          if (coderInfo->sf[coderInfo->bandcnt] < 10) sfacfix = (faac_real)0.0;
+          else sfacfix = FAAC_POW(10, (faac_real)sfac / sfstep);
       }
 
       end -= start;
       xi = xitab;
-      if (sfacfix <= 0.0)
+      if (sfacfix <= (faac_real)0.0)
       {
           memset(xi, 0, gsize * end * sizeof(int));
       }
@@ -255,17 +256,18 @@ static void qlevel(CoderInfo * __restrict coderInfo,
               xi += end;
           }
           if (final_pass) {
-              for (int i = 0; i < gsize * end; i++) {
+              int i;
+              for (i = 0; i < gsize * end; i++) {
                   if (xitab[i] > 8191) xitab[i] = 8191;
                   else if (xitab[i] < -8191) xitab[i] = -8191;
               }
           }
       }
       huffbook(coderInfo, xitab, gsize * end);
-      if (!final_pass) coderInfo->bandcnt++;
-      else coderInfo->bandcnt++;
+      coderInfo->bandcnt++;
     }
 }
+
 
 int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantCfg *aacquantCfg)
 {
@@ -351,7 +353,6 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
         gxr = xr;
         for (cnt = 0; cnt < coder->groups.n; cnt++)
         {
-            // Note: bmask could be skipped if we store results, but it's fast enough
             bmask(coder, gxr, bandlvl, bandenrg, cnt, (faac_real)aacquantCfg->quality/DEFQUAL);
             qlevel(coder, gxr, bandlvl, bandenrg, cnt, aacquantCfg->pnslevel, 1);
             gxr += coder->groups.len[cnt] * BLOCK_LEN_SHORT;
@@ -359,6 +360,7 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
     }
     return 1;
 }
+
 void CalcBW(unsigned *bw, int rate, SR_INFO *sr, AACQuantCfg *aacquantCfg)
 {
     // find max short frame band
