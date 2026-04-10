@@ -225,7 +225,7 @@ static void qlevel(CoderInfo * __restrict coderInfo,
           if (bandqual[sb] < pnsthr)
           {
               coderInfo->book[coderInfo->bandcnt] = HCB_PNS;
-              coderInfo->sf[coderInfo->bandcnt] +=
+              coderInfo->sf[coderInfo->bandcnt] =
                   FAAC_LRINT(FAAC_LOG10(etot) * (0.5 * sfstep));
               coderInfo->bandcnt++;
               continue;
@@ -262,7 +262,9 @@ static void qlevel(CoderInfo * __restrict coderInfo,
           }
       }
       huffbook(coderInfo, xitab, gsize * end);
-      if (!final_pass) coderInfo->sf[coderInfo->bandcnt] += SF_OFFSET - sfac;
+      if (final_pass && coderInfo->book[coderInfo->bandcnt] == HCB_ZERO)
+          coderInfo->book[coderInfo->bandcnt] = 1;
+      if (!final_pass) coderInfo->sf[coderInfo->bandcnt] = SF_OFFSET - sfac;
       coderInfo->bandcnt++;
     }
 }
@@ -352,8 +354,7 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
         gxr = xr;
         for (cnt = 0; cnt < coder->groups.n; cnt++)
         {
-            bmask(coder, gxr, bandlvl, bandenrg, cnt, (faac_real)aacquantCfg->quality/DEFQUAL);
-            qlevel(coder, gxr, bandlvl, bandenrg, cnt, aacquantCfg->pnslevel, 1);
+            qlevel(coder, gxr, NULL, NULL, cnt, aacquantCfg->pnslevel, 1);
             gxr += coder->groups.len[cnt] * BLOCK_LEN_SHORT;
         }
     }
