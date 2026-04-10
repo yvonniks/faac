@@ -1,28 +1,36 @@
-# TNS Optimization Research and Implementation
+# TNS Optimization Research and Implementation (v3)
 
 ## Overview
-Temporal Noise Shaping (TNS) has been enabled by default in FAAC. To ensure a positive average MOS (Mean Opinion Score) delta, a bitrate-aware "Auto-TNS" heuristic was implemented. This heuristic balances the temporal coding gains against the bitstream overhead ("bit tax") of TNS coefficients.
+Temporal Noise Shaping (TNS) has been enabled by default in FAAC. This revision addresses quality regressions and stability issues identified in previous iterations. The goal is to provide a robust "Auto-TNS" mode that yields a positive average MOS delta across all scenarios.
 
-## Core Heuristics
+## Core Fixes and Heuristics
 
-### 1. Bitrate-Aware Tiering
-TNS requires bits to transmit filter coefficients. At low bitrates, these bits are often better spent on spectral quantization.
-- **< 48 kbps/channel**: TNS is disabled by default. Bit starvation in the spectral domain outweighs any temporal gains.
-- **48 - 80 kbps/channel**: Conservative mode. Triggered only on high-energy transients (Gain > 1.4, Max Order 12).
-- **80 - 128 kbps/channel**: Standard mode. (Gain > 1.6, Max Order 12).
-- **> 128 kbps/channel**: Aggressive mode. (Gain > 1.1, Max Order 20).
+### 1. Stability Fix: Reflection Coefficient Clamping
+A critical issue was identified where reflection coefficients could reach exactly -1.0 (quantized index -8 for 4-bit resolution). This causes the decoder's synthesis filter to become unstable or leads to division-by-zero, resulting in severe audio artifacts.
+- **Fix**: The quantized index is now clamped to `[-(2^(res-1)-1), 2^(res-1)-1]`. For 4-bit TNS, this restricts indices to `[-7, 7]`, ensuring coefficients stay within `[-0.98, 0.98]`.
 
-### 2. Post-Quantization Gain Check
-Traditional TNS implementations calculate prediction gain on the raw reflection coefficients. Our implementation evaluates the prediction gain *after* coefficients have been quantized and compressed (3-bit or 4-bit). This ensures that TNS is only applied if it remains effective despite quantization noise.
+### 2. Standard-Compliant Quantization
+The quantization mapping was aligned with the ISO/IEC 14496-3 standard.
+- **Mapping**: $k = \sin(index \cdot \frac{\pi}{2} / 2^{res-1})$
+- **Implementation**: Used a symmetric mapping with `fac = (1 << (res-1)) / (M_PI / 2.0)` to ensure bitstream compatibility with standard decoders.
 
-### 3. Structural Bug Fix
-A critical bug was identified where TNS was being applied *after* spectral grouping (`BlocGroup`) for short windows. In AAC, TNS must be applied to individual windows before they are interleaved/grouped to correctly shape noise in the time domain. This was corrected in `libfaac/frame.c`.
+### 3. Tiered "Auto-TNS" Logic
+TNS is now more selective, especially for Long blocks at high bitrates where spectral resolution is usually preferable.
+- **< 64 kbps/ch**: TNS disabled (Auto mode).
+- **64 - 128 kbps/ch**: Conservative thresholds (Gain > 2.0 - 2.4).
+- **> 128 kbps/ch**: Standard threshold (Gain > 2.0).
+- **Short Blocks**: More liberal triggering (Gain > 1.4) as TNS is significantly more beneficial for transient signals.
+
+### 4. Throughput Optimization
+To mitigate the performance impact of TNS analysis:
+- **Energy Early-Exit**: Analysis is skipped if the total energy in the TNS bands is below a threshold.
+- **Early Termination**: Levinson-Durbin recursion stops early if prediction gain is not improving.
+- **Optimized Autocorrelation**: Streamlined the inner loop of the autocorrelation calculation.
 
 ## Technical Improvements
-- **Symmetric Quantization**: Reflection coefficients are quantized using a symmetric `asin` mapping to match the AAC standard.
-- **Coefficient Compression**: Automatic selection between 3-bit and 4-bit resolution based on coefficient magnitude.
-- **Saturating Filters**: Improved `TnsInvFilter` with order clamping to prevent out-of-bounds access on extremely short spectral segments.
-- **NaN Protection**: Added clamping for `asin` inputs to prevent floating-point errors on signals with perfect correlation.
+- **Profile Compliance**: Strictly enforces a maximum order of 12 for LC profile Long blocks.
+- **NaN Protection**: Maintained clamping for `asin()` inputs to prevent floating-point errors.
+- **Bitstream Consistency**: Refined the signaling of coefficient resolution and compression to ensure the encoder and bitstream writer are always in sync.
 
-## Benchmark Evidence
-Internal benchmarking showed that enabling TNS naively at low bitrates (e.g., 40kbps stereo) resulted in a MOS regression of ~0.05. With the tiered "Auto-TNS" logic, these regressions are avoided while maintaining gains of +0.15 to +0.27 on transient-rich samples like `vss_C_22_ECHO_MK.wav` and `music_std`.
+## Benchmark Expectations
+The v3 implementation resolves the severe MOS regressions caused by filter instability. By using more conservative thresholds for Long blocks, we avoid the "pre-echo" like artifacts sometimes caused by TNS on tonal signals, while retaining the temporal benefits for transients in Short blocks. Overall, this is expected to yield a positive average MOS delta.

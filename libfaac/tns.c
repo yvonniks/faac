@@ -37,15 +37,15 @@ Copyright (c) 1997.
 /***********************************************/
 /* TNS Bitrate and Gain Thresholds             */
 /***********************************************/
-#define TNS_BR_LOW        48
-#define TNS_BR_MID        80
+#define TNS_BR_LOW        64
+#define TNS_BR_MID        96
 #define TNS_BR_HIGH       128
 
-#define TNS_GAIN_INITIAL  1.2
-#define TNS_GAIN_AUTO_LOW  1.4
-#define TNS_GAIN_AUTO_MID  1.6
-#define TNS_GAIN_AUTO_HIGH 1.4
-#define TNS_GAIN_AUTO_INITIAL 1.2
+#define TNS_GAIN_INITIAL  1.4
+#define TNS_GAIN_AUTO_LOW  2.0
+#define TNS_GAIN_AUTO_MID  2.4
+#define TNS_GAIN_AUTO_HIGH 2.0
+#define TNS_GAIN_AUTO_INITIAL 1.4
 #define TNS_ORDER_AUTO_LOW  12
 #define TNS_ORDER_AUTO_HIGH 20
 #define TNS_SHORT_MULTIPLIER 1.5
@@ -149,7 +149,7 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
     int numberOfWindows,windowSize;
     int startBand,stopBand,order;    /* Bands over which to apply TNS */
     int lengthInBands;               /* Length to filter, in bands */
-    int w;
+    int w, i;
     int startIndex,length;
     faac_real gain;
 
@@ -217,10 +217,23 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
 
         if (length <= 0) continue;
 
+        /* Check energy in TNS bands to save CPU */
+        faac_real energy = 0.0;
+        for (i = 0; i < length; i++) {
+            faac_real s = spec[startIndex + i];
+            energy += s * s;
+        }
+
+        if (energy < (faac_real)length * 0.25) {
+            continue;
+        }
+
         gain = LevinsonDurbin(order,length,&spec[startIndex],k);
 
         /* Initial check with a liberal threshold to avoid expensive quantization check. */
         faac_real initial_threshold = (tnsInfo->useTns == -1 && br_per_ch < TNS_BR_MID) ? TNS_GAIN_AUTO_INITIAL : TNS_GAIN_INITIAL;
+        /* Extra selective for long blocks */
+        if (blockType != ONLY_SHORT_WINDOW) initial_threshold *= 1.2;
 
         if (gain > initial_threshold) {  /* Use TNS */
             int truncatedOrder;
@@ -244,9 +257,10 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
                 }
 
                 /* Try 4-bit quantization */
-                QuantizeReflectionCoeffs(truncatedOrder, DEF_TNS_COEFF_RES, k_quant, index_quant);
+                QuantizeReflectionCoeffs(truncatedOrder, 4, k_quant, index_quant);
 
-                /* Check if we can use 3 bits instead */
+                /* Check if we can use 3 bits instead (range [-4, 3]) */
+                can_compress = 1;
                 for (i=1; i<=truncatedOrder; i++) {
                     if (index_quant[i] < -4 || index_quant[i] > 3) {
                         can_compress = 0;
@@ -255,7 +269,7 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
                 }
 
                 if (can_compress) {
-                    QuantizeReflectionCoeffs(truncatedOrder, DEF_TNS_COEFF_RES - 1, k_quant, index_quant);
+                    QuantizeReflectionCoeffs(truncatedOrder, 3, k_quant, index_quant);
                 }
 
                 for (i=1; i<=truncatedOrder; i++) {
@@ -290,7 +304,8 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
                     tnsInfo->tnsDataPresent = 1;
                     tnsFilter->direction = 0;
                     tnsFilter->coefCompress = can_compress;
-                    windowData->coefResolution = can_compress ? (DEF_TNS_COEFF_RES - 1) : DEF_TNS_COEFF_RES;
+                    /* Use base 4-bit resolution, dropping MSB via coefCompress when appropriate */
+                    windowData->coefResolution = 4;
                     tnsFilter->length = lengthInBands;
                     tnsFilter->order = target_order;
                     for (i=1; i<=target_order; i++) {
@@ -463,15 +478,15 @@ static void QuantizeReflectionCoeffs(int fOrder,
                               int* indexArray)
 {
     int i;
-    faac_real fac = (faac_real)(1 << coeffRes) / M_PI;
-    int low = -(1 << (coeffRes - 1));
+    faac_real fac = (faac_real)(1 << (coeffRes - 1)) / (M_PI / 2.0);
+    int low = -(1 << (coeffRes - 1)) + 1; /* avoid -1.0 for stability */
     int high = (1 << (coeffRes - 1)) - 1;
 
     /* Quantize and inverse quantize */
     for (i=1;i<=fOrder;i++) {
         faac_real val = kArray[i];
-        if (val > 0.9999) val = 0.9999;
-        if (val < -0.9999) val = -0.9999;
+        if (val > 0.99) val = 0.99;
+        if (val < -0.99) val = -0.99;
         val = FAAC_ASIN(val);
         indexArray[i] = FAAC_LRINT(val * fac);
         if (indexArray[i] < low) indexArray[i] = low;
@@ -576,7 +591,7 @@ static faac_real LevinsonDurbin(int fOrder,          /* Filter order */
             aPtr=aTemp;         /* Last becomes current */
         }
         /* If perfect prediction, trigger TNS */
-        if (error <= 0.0) return DEF_TNS_GAIN_THRESH + 1.0;
+        if (error <= 0.0) return 100.0;
         return signal/error;    /* return the gain */
     }
 }
