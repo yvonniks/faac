@@ -263,7 +263,10 @@ static void qlevel(CoderInfo * __restrict coderInfo,
       }
       huffbook(coderInfo, xitab, gsize * end);
       if (final_pass && coderInfo->book[coderInfo->bandcnt] == HCB_ZERO)
+      {
           coderInfo->book[coderInfo->bandcnt] = 1;
+          huffcode(xitab, gsize * end, 1, coderInfo);
+      }
       if (!final_pass) coderInfo->sf[coderInfo->bandcnt] = SF_OFFSET - sfac;
       coderInfo->bandcnt++;
     }
@@ -438,7 +441,7 @@ void BlocGroup(faac_real *xr, CoderInfo *coderInfo, AACQuantCfg *cfg)
     int fastmin;
     int maxsfb, maxl;
 
-    if (coderInfo->block_type != ONLY_SHORT_WINDOW)
+    if (coderInfo->block_type != ONLY_LONG_WINDOW)
     {
         coderInfo->groups.n = 1;
         coderInfo->groups.len[0] = 1;
