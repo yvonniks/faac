@@ -1,13 +1,8 @@
-import os
 import re
 
-filepath = 'libfaac/quantize.c'
-with open(filepath, 'r') as f:
-    content = f.read()
+content = open('libfaac/quantize.c').read()
 
-# Define the new qlevel function
-new_qlevel = """
-static void qlevel(CoderInfo * __restrict coderInfo,
+new_qlevel = """static void qlevel(CoderInfo * __restrict coderInfo,
                    const faac_real * __restrict xr0,
                    const faac_real * __restrict bandqual,
                    const faac_real * __restrict bandenrg,
@@ -76,6 +71,7 @@ static void qlevel(CoderInfo * __restrict coderInfo,
 
           sfac = FAAC_LRINT(FAAC_LOG10(bandqual[sb] / rmsx) * sfstep);
           coderInfo->sf[coderInfo->bandcnt] = SF_OFFSET - sfac;
+
           if ((SF_OFFSET - sfac) < 10) sfacfix = (faac_real)0.0;
           else sfacfix = FAAC_POW(10, (faac_real)sfac / sfstep);
       } else {
@@ -109,12 +105,9 @@ static void qlevel(CoderInfo * __restrict coderInfo,
       huffbook(coderInfo, xitab, gsize * end);
       coderInfo->bandcnt++;
     }
-}
-"""
+}"""
 
-# Define the new BlocQuant function
-new_bloc_quant = """
-int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantCfg *aacquantCfg)
+new_bloc_quant = """int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantCfg *aacquantCfg)
 {
     faac_real bandlvl[MAX_SCFAC_BANDS];
     faac_real bandenrg[MAX_SCFAC_BANDS];
@@ -204,16 +197,9 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
         }
     }
     return 1;
-}
-"""
+}"""
 
-# Replace qlevel
-qlevel_pattern = re.compile(r"static void qlevel\(CoderInfo \* __restrict coderInfo,[\s\S]*?\}\n\}")
-content = qlevel_pattern.sub(new_qlevel, content)
+content = re.sub(r"static void qlevel\(CoderInfo \* __restrict coderInfo,[\s\S]*?\}\n\}", new_qlevel, content)
+content = re.sub(r"int BlocQuant\(CoderInfo \* __restrict coder, faac_real \* __restrict xr, AACQuantCfg \*aacquantCfg\)[\s\S]*?return 1;\n    \}\n    return 0;\n\}", new_bloc_quant, content)
 
-# Replace BlocQuant
-blocquant_pattern = re.compile(r"int BlocQuant\(CoderInfo \* __restrict coder, faac_real \* __restrict xr, AACQuantCfg \*aacquantCfg\)[\s\S]*?return 0;\n    \}\n    return 0;\n\}")
-content = blocquant_pattern.sub(new_bloc_quant, content)
-
-with open(filepath, 'w') as f:
-    f.write(content)
+open('libfaac/quantize.c', 'w').write(content)

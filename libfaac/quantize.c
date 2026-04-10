@@ -233,6 +233,7 @@ static void qlevel(CoderInfo * __restrict coderInfo,
 
           sfac = FAAC_LRINT(FAAC_LOG10(bandqual[sb] / rmsx) * sfstep);
           coderInfo->sf[coderInfo->bandcnt] = SF_OFFSET - sfac;
+
           if ((SF_OFFSET - sfac) < 10) sfacfix = (faac_real)0.0;
           else sfacfix = FAAC_POW(10, (faac_real)sfac / sfstep);
       } else {
