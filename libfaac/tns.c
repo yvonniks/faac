@@ -41,10 +41,10 @@ Copyright (c) 1997.
 #define TNS_BR_MID        80
 #define TNS_BR_HIGH       128
 
-#define TNS_GAIN_INITIAL  1.05
+#define TNS_GAIN_INITIAL  1.2
 #define TNS_GAIN_AUTO_LOW  1.4
 #define TNS_GAIN_AUTO_MID  1.6
-#define TNS_GAIN_AUTO_HIGH 1.1
+#define TNS_GAIN_AUTO_HIGH 1.4
 #define TNS_GAIN_AUTO_INITIAL 1.2
 #define TNS_ORDER_AUTO_LOW  12
 #define TNS_ORDER_AUTO_HIGH 20
@@ -178,6 +178,16 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
         break;
     }
 
+    /* Bitrate per channel in kbps */
+    int br_per_ch = tnsInfo->bitRate / 1000;
+
+    /* Reduce analysis order for lower bitrates in Auto mode to save CPU */
+    if (tnsInfo->useTns == -1) {
+        if (br_per_ch < TNS_BR_HIGH) {
+            order = min(order, TNS_ORDER_AUTO_LOW);
+        }
+    }
+
     /* Make sure that start and stop bands < maxSfb */
     /* Make sure that start and stop bands >= 0 */
     startBand = min(startBand,maxSfb);
@@ -188,9 +198,6 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
     tnsInfo->tnsDataPresent = 0;     /* default TNS not used */
 
     if (tnsInfo->useTns == 0) return;
-
-    /* Bitrate per channel in kbps */
-    int br_per_ch = tnsInfo->bitRate / 1000;
 
     /* In Auto-TNS mode, disable TNS for bitrates < TNS_BR_LOW kbps per channel
        to avoid excessive bit-tax on spectral data. */
@@ -259,18 +266,18 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
 
                 /* Final decision thresholds for applying TNS. */
                 faac_real threshold = TNS_GAIN_INITIAL;
-                int target_order = truncatedOrder;
+                int target_order = min(truncatedOrder, (blockType == ONLY_SHORT_WINDOW) ? tnsInfo->tnsMaxOrderShort : tnsInfo->tnsMaxOrderLong);
 
                 if (tnsInfo->useTns == -1) {
                     if (br_per_ch < TNS_BR_MID) {
                         threshold = TNS_GAIN_AUTO_LOW;
-                        target_order = min(truncatedOrder, TNS_ORDER_AUTO_LOW);
+                        target_order = min(target_order, TNS_ORDER_AUTO_LOW);
                     } else if (br_per_ch < TNS_BR_HIGH) {
                         threshold = TNS_GAIN_AUTO_MID;
-                        target_order = min(truncatedOrder, TNS_ORDER_AUTO_LOW);
+                        target_order = min(target_order, TNS_ORDER_AUTO_LOW);
                     } else {
                         threshold = TNS_GAIN_AUTO_HIGH;
-                        target_order = min(truncatedOrder, TNS_ORDER_AUTO_HIGH);
+                        target_order = min(target_order, TNS_ORDER_AUTO_HIGH);
                     }
                 }
 
@@ -455,20 +462,21 @@ static void QuantizeReflectionCoeffs(int fOrder,
                               faac_real* kArray,
                               int* indexArray)
 {
-    faac_real iqfac,iqfac_m;
     int i;
-
-    iqfac = ((1<<(coeffRes-1))-0.5)/(M_PI/2.0);
-    iqfac_m = ((1<<(coeffRes-1))+0.5)/(M_PI/2.0);
+    faac_real fac = (faac_real)(1 << coeffRes) / M_PI;
+    int low = -(1 << (coeffRes - 1));
+    int high = (1 << (coeffRes - 1)) - 1;
 
     /* Quantize and inverse quantize */
     for (i=1;i<=fOrder;i++) {
         faac_real val = kArray[i];
-        if (val > 0.999) val = 0.999;
-        if (val < -0.999) val = -0.999;
+        if (val > 0.9999) val = 0.9999;
+        if (val < -0.9999) val = -0.9999;
         val = FAAC_ASIN(val);
-        indexArray[i] = (val>=0)?(int)(0.5+(val*iqfac)):(int)(-0.5+(val*iqfac_m));
-        kArray[i] = FAAC_SIN((faac_real)indexArray[i]/((indexArray[i]>=0)?iqfac:iqfac_m));
+        indexArray[i] = FAAC_LRINT(val * fac);
+        if (indexArray[i] < low) indexArray[i] = low;
+        if (indexArray[i] > high) indexArray[i] = high;
+        kArray[i] = FAAC_SIN((faac_real)indexArray[i] / fac);
     }
 }
 
@@ -485,10 +493,14 @@ static void Autocorrelation(int maxOrder,        /* Maximum autocorr order */
     int order,index;
 
     for (order=0;order<=maxOrder;order++) {
-        rArray[order]=0.0;
-        for (index=0;index<dataSize-order;index++) {
-            rArray[order]+=data[index]*data[index+order];
+        faac_real sum = 0.0;
+        int n = dataSize - order;
+        faac_real *p1 = data;
+        faac_real *p2 = data + order;
+        for (index=0;index<n;index++) {
+            sum += (*p1++) * (*p2++);
         }
+        rArray[order] = sum;
     }
 }
 
