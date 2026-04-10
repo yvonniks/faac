@@ -153,28 +153,21 @@ static DWORD WINAPI EncodeFile(LPVOID pParam)
             /* set encoder configuration */
             faacEncConfigurationPtr config = faacEncGetCurrentConfiguration(hEncoder);
 
+            switch (SendMessage(GetDlgItem(hWnd, IDC_JOINT_MODE), CB_GETCURSEL, 0, 0))
             {
-                int jointSel = (int)SendMessage(GetDlgItem(hWnd, IDC_JOINTMODE), CB_GETCURSEL, 0, 0);
-
-                switch (jointSel)
-                {
-                case 0: /* "None" */
-                    config->jointmode = JOINT_NONE;
-                    break;
-                case 1: /* "Mid/Side" */
-                    config->jointmode = JOINT_MS;
-                    break;
-                case 2: /* "Intensity Stereo" */
-                    config->jointmode = JOINT_IS;
-                    break;
-                case 3: /* "Mixed" */
-                    config->jointmode = JOINT_MIXED;
-                    break;
-                default:
-                    /* Fallback to a sensible default if the combo box selection is invalid */
-                    config->jointmode = JOINT_MIXED;
-                    break;
-                }
+            case 1:
+                config->jointmode = JOINT_MS;
+                break;
+            case 2:
+                config->jointmode = JOINT_IS;
+                break;
+            case 3:
+                config->jointmode = JOINT_MIXED;
+                break;
+            case 0:
+            default:
+                config->jointmode = JOINT_NONE;
+                break;
             }
             config->useTns = IsDlgButtonChecked(hWnd, IDC_USETNS) == BST_CHECKED ? 1 : 0;
             config->useLfe = IsDlgButtonChecked(hWnd, IDC_USELFE) == BST_CHECKED ? 1 : 0;
@@ -361,11 +354,11 @@ static BOOL WINAPI DialogProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         SendMessage(GetDlgItem(hWnd, IDC_OBJECTTYPE), CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)"Low Complexity");
         SendMessage(GetDlgItem(hWnd, IDC_OBJECTTYPE), CB_SETCURSEL, 0, 0);
 
-        SendMessage(GetDlgItem(hWnd, IDC_JOINTMODE), CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)"None");
-        SendMessage(GetDlgItem(hWnd, IDC_JOINTMODE), CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)"Mid/Side");
-        SendMessage(GetDlgItem(hWnd, IDC_JOINTMODE), CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)"Intensity Stereo");
-        SendMessage(GetDlgItem(hWnd, IDC_JOINTMODE), CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)"Mixed");
-        SendMessage(GetDlgItem(hWnd, IDC_JOINTMODE), CB_SETCURSEL, 3, 0);
+        SendMessage(GetDlgItem(hWnd, IDC_JOINT_MODE), CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)"None");
+        SendMessage(GetDlgItem(hWnd, IDC_JOINT_MODE), CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)"M/S");
+        SendMessage(GetDlgItem(hWnd, IDC_JOINT_MODE), CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)"IS");
+        SendMessage(GetDlgItem(hWnd, IDC_JOINT_MODE), CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)"Mixed");
+        SendMessage(GetDlgItem(hWnd, IDC_JOINT_MODE), CB_SETCURSEL, 3, 0);
 
         CheckDlgButton(hWnd, IDC_USELFE, FALSE);
         CheckDlgButton(hWnd, IDC_USERAW, FALSE);
