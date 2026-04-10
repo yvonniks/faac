@@ -35,6 +35,22 @@ Copyright (c) 1997.
 #include "util.h"
 
 /***********************************************/
+/* TNS Bitrate and Gain Thresholds             */
+/***********************************************/
+#define TNS_BR_LOW        48
+#define TNS_BR_MID        80
+#define TNS_BR_HIGH       128
+
+#define TNS_GAIN_INITIAL  1.05
+#define TNS_GAIN_AUTO_LOW  1.4
+#define TNS_GAIN_AUTO_MID  1.6
+#define TNS_GAIN_AUTO_HIGH 1.1
+#define TNS_GAIN_AUTO_INITIAL 1.2
+#define TNS_ORDER_AUTO_LOW  12
+#define TNS_ORDER_AUTO_HIGH 20
+#define TNS_SHORT_MULTIPLIER 1.5
+
+/***********************************************/
 /* TNS Profile/Frequency Dependent Parameters  */
 /***********************************************/
 /* Limit bands to > 2.0 kHz */
@@ -171,17 +187,14 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
 
     tnsInfo->tnsDataPresent = 0;     /* default TNS not used */
 
+    if (tnsInfo->useTns == 0) return;
+
     /* Bitrate per channel in kbps */
     int br_per_ch = tnsInfo->bitRate / 1000;
 
-    /* Logic per requirements:
-       < 32 kbps stereo (16 kbps mono): Off
-       32 - 80 kbps stereo (16 - 40 kbps mono): Aggressive, low-order
-       80 - 160 kbps stereo (40 - 80 kbps mono): Adaptive based on gain
-       > 160 kbps stereo (> 80 kbps mono): Selective for transients
-    */
-    if (tnsInfo->useTns == 0) return;
-    if (tnsInfo->useTns == -1 && br_per_ch < 48) return; /* < 96 kbps stereo: Off. Bits are too precious. */
+    /* In Auto-TNS mode, disable TNS for bitrates < TNS_BR_LOW kbps per channel
+       to avoid excessive bit-tax on spectral data. */
+    if (tnsInfo->useTns == -1 && br_per_ch < TNS_BR_LOW) return;
 
     /* Perform analysis and filtering for each window */
     for (w=0;w<numberOfWindows;w++) {
@@ -200,7 +213,7 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
         gain = LevinsonDurbin(order,length,&spec[startIndex],k);
 
         /* Initial check with a liberal threshold to avoid expensive quantization check. */
-        faac_real initial_threshold = (br_per_ch < 80) ? 1.2 : 1.01;
+        faac_real initial_threshold = (tnsInfo->useTns == -1 && br_per_ch < TNS_BR_MID) ? TNS_GAIN_AUTO_INITIAL : TNS_GAIN_INITIAL;
 
         if (gain > initial_threshold) {  /* Use TNS */
             int truncatedOrder;
@@ -245,22 +258,27 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
                 pred_gain = (error > 0.0) ? 1.0 / error : 100.0;
 
                 /* Final decision thresholds for applying TNS. */
-                faac_real threshold = 1.05;
+                faac_real threshold = TNS_GAIN_INITIAL;
                 int target_order = truncatedOrder;
 
-                if (br_per_ch < 80) { /* < 160 kbps stereo */
-                    /* Aggressive but extremely selective: bits are limited */
-                    threshold = 1.4;
-                    target_order = min(truncatedOrder, 12);
-                } else { /* >= 160 kbps stereo */
-                    /* Selective: engage for clear temporal shaping benefits */
-                    threshold = 1.1;
+                if (tnsInfo->useTns == -1) {
+                    if (br_per_ch < TNS_BR_MID) {
+                        threshold = TNS_GAIN_AUTO_LOW;
+                        target_order = min(truncatedOrder, TNS_ORDER_AUTO_LOW);
+                    } else if (br_per_ch < TNS_BR_HIGH) {
+                        threshold = TNS_GAIN_AUTO_MID;
+                        target_order = min(truncatedOrder, TNS_ORDER_AUTO_LOW);
+                    } else {
+                        threshold = TNS_GAIN_AUTO_HIGH;
+                        target_order = min(truncatedOrder, TNS_ORDER_AUTO_HIGH);
+                    }
                 }
 
                 /* Extra strictness for short blocks which are already time-domain tools */
-                if (blockType == ONLY_SHORT_WINDOW) threshold *= 1.5;
+                if (blockType == ONLY_SHORT_WINDOW) threshold *= TNS_SHORT_MULTIPLIER;
 
                 if (pred_gain > threshold && target_order > 1) {
+                    if (target_order > length) target_order = length;
                     windowData->numFilters++;
                     tnsInfo->tnsDataPresent = 1;
                     tnsFilter->direction = 0;
@@ -358,7 +376,8 @@ static void TnsInvFilter(int length,faac_real* spec,TnsFilterData* filter, faac_
     int order=filter->order;
     faac_real* a=filter->aCoeffs;
 
-    if (order > length) order = length;
+    if (order >= length) order = length > 0 ? length - 1 : 0;
+    if (order <= 0) return;
 
     /* Determine loop parameters for given direction */
     if (filter->direction) {

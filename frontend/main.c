@@ -190,6 +190,7 @@ static help_t help_mp4[] = {
 };
 
 static help_t help_advanced[] = {
+    {"--tns\t\tForce use of TNS, temporal noise shaping.\n"},
     {"--no-tns\tDisable coding of TNS, temporal noise shaping.\n"},
     {"--joint 0\tDisable joint stereo coding.\n"},
     {"--joint 1\tUse Mid/Side coding.\n"},
@@ -561,7 +562,7 @@ int main(int argc, char *argv[])
         int c = -1;
         int option_index = 0;
 
-        c = getopt_long(argc, argv, "Hhb:m:o:rnc:q:PR:B:C:I:Xwv:",
+        c = getopt_long(argc, argv, "Hhb:m:o:rc:q:PR:B:C:I:Xwv:",
                         long_options, &option_index);
 
         if (c == -1)
@@ -584,11 +585,6 @@ int main(int argc, char *argv[])
         case 'r':
             {
                 stream = RAW_STREAM;
-                break;
-            }
-        case 'n':
-            {
-                useTns = 1;
                 break;
             }
         case 'c':
@@ -1054,7 +1050,7 @@ int main(int argc, char *argv[])
     if (myFormat->useTns == 1) {
         fprintf(stderr, " + TNS");
     } else if (myFormat->useTns == -1) {
-        fprintf(stderr, " + Auto-TNS");
+        fprintf(stderr, " + TNS(auto)");
     }
 
     switch(myFormat->jointmode) {
