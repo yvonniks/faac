@@ -234,10 +234,14 @@ void PseudoSBR(CoderInfo *coderInfo, faac_real *freq,
 
     for (patch = 0; patch < MAX_SBR_PATCHES && dst < tgt_bin; patch++) {
         int remaining   = tgt_bin - dst;
-        int patch_size  = bw_bin / 2; /* patch size is half the natural bandwidth */
+        /* Use a fixed patch size for consistent transposition, but cap by available bandwidth.
+           A size of 128 bins (approx 2.7kHz at 44.1kHz) matches AAC spectral structures. */
+        int patch_size  = 128;
+        if (patch_size > bw_bin) patch_size = bw_bin;
         if (patch_size > remaining) patch_size = remaining;
+        if (patch_size < MIN_PATCH_BINS) patch_size = remaining;
 
-        /* Transpose source window downward for each subsequent patch to avoid comb filtering */
+        /* Transpose source window downward for each subsequent patch to avoid comb filtering. */
         int src_start = bw_bin - patch_size * (patch + 1);
         if (src_start < 0) src_start = 0;
 
@@ -247,13 +251,17 @@ void PseudoSBR(CoderInfo *coderInfo, faac_real *freq,
         for (p = 0; p < patch_size; p++)
             src_energy += (float)(freq[src_start + p] * freq[src_start + p]);
 
-        float noise_scale = (src_energy > 1e-15f)
-            ? noise_mix * sqrtf(src_energy / (float)patch_size)
+        /* Correct noise scaling: noise_mix is desired energy ratio of noise to total.
+           noise_energy = patch_energy * noise_mix / (1 - noise_mix).
+           Our uniform PRNG has variance 1/12. noise_scale^2 / 12 = noise_energy_density. */
+        float noise_scale = (src_energy > 1e-15f && noise_mix < 0.99f)
+            ? sqrtf(12.0f * (src_energy / (float)patch_size) * (noise_mix / (1.0f - noise_mix)))
             : 0.0f;
 
         for (p = 0; p < patch_size; p++) {
             float s = (float)freq[src_start + p] * cumulative_gain;
-            float n = lcg_float(randState) * noise_scale;
+            /* Noise floor should also follow the rolloff */
+            float n = lcg_float(randState) * noise_scale * cumulative_gain;
             freq[dst + p] = (faac_real)(s + n);
         }
 

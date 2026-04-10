@@ -514,6 +514,12 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
     if (hEncoder->frameNum <= 3) /* Still filling up the buffers */
         return 0;
 
+    /* Psychoacoustics */
+    hEncoder->psymodel->PsyCalculate(channelInfo, &hEncoder->gpsyInfo, hEncoder->psyInfo,
+        hEncoder->srInfo->cb_width_long, hEncoder->srInfo->num_cb_long,
+        hEncoder->srInfo->cb_width_short,
+        hEncoder->srInfo->num_cb_short, numChannels, (faac_real)hEncoder->aacquantCfg.quality / DEFQUAL);
+
     hEncoder->psymodel->BlockSwitch(coderInfo, hEncoder->psyInfo, numChannels);
 
     /* force block type */
@@ -572,7 +578,7 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
 
     /* Pseudo-SBR: synthesise spectral content above the natural bandwidth.
        Only fires in ABR mode when naturalBW < 40% Nyquist (low bitrates).
-       Placed after FilterBank() and before Psychoacoustic() so the synthesized
+       Placed after FilterBank() and before TnsEncode/BlocQuant so the synthesized
        bands get analyzed and processed as part of the normal pipeline. */
     if (hEncoder->config.usePseudoSBR && hEncoder->config.bitRate) {
         unsigned int naturalBW = hEncoder->config.bandWidth;
@@ -596,12 +602,6 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
             }
         }
     }
-
-    /* Psychoacoustics */
-    hEncoder->psymodel->PsyCalculate(channelInfo, &hEncoder->gpsyInfo, hEncoder->psyInfo,
-        hEncoder->srInfo->cb_width_long, hEncoder->srInfo->num_cb_long,
-        hEncoder->srInfo->cb_width_short,
-        hEncoder->srInfo->num_cb_short, numChannels, (faac_real)hEncoder->aacquantCfg.quality / DEFQUAL);
 
     /* Perform TNS analysis and filtering */
     for (channel = 0; channel < numChannels; channel++) {
@@ -627,6 +627,44 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
 
     AACstereo(coderInfo, channelInfo, hEncoder->freqBuff, numChannels,
               (faac_real)hEncoder->aacquantCfg.quality/DEFQUAL, jointmode);
+
+    // fix max_sfb in CPE mode
+    for (channel = 0; channel < numChannels; channel++)
+    {
+		if (channelInfo[channel].present
+				&& (channelInfo[channel].type == ELEMENT_CPE)
+				&& (channelInfo[channel].ch_is_left))
+		{
+			CoderInfo *cil, *cir;
+            int sb;
+            unsigned int offset;
+
+			cil = &coderInfo[channel];
+			cir = &coderInfo[channelInfo[channel].paired_ch];
+
+            if (cil->sfbn < cir->sfbn) {
+                cil->sfbn = cir->sfbn;
+                offset = cil->sfb_offset[0];
+                for (sb = 0; sb < cil->sfbn; sb++) {
+                    if (cil->block_type == ONLY_SHORT_WINDOW)
+                        offset += hEncoder->srInfo->cb_width_short[sb];
+                    else
+                        offset += hEncoder->srInfo->cb_width_long[sb];
+                    cil->sfb_offset[sb + 1] = offset;
+                }
+            } else if (cir->sfbn < cil->sfbn) {
+                cir->sfbn = cil->sfbn;
+                offset = cir->sfb_offset[0];
+                for (sb = 0; sb < cir->sfbn; sb++) {
+                    if (cir->block_type == ONLY_SHORT_WINDOW)
+                        offset += hEncoder->srInfo->cb_width_short[sb];
+                    else
+                        offset += hEncoder->srInfo->cb_width_long[sb];
+                    cir->sfb_offset[sb + 1] = offset;
+                }
+            }
+		}
+    }
 
     for (channel = 0; channel < numChannels; channel++) {
         BlocQuant(&coderInfo[channel], hEncoder->freqBuff[channel],
