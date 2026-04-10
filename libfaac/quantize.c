@@ -225,22 +225,19 @@ static void qlevel(CoderInfo * __restrict coderInfo,
           if (bandqual[sb] < pnsthr)
           {
               coderInfo->book[coderInfo->bandcnt] = HCB_PNS;
-              coderInfo->sf[coderInfo->bandcnt] =
+              coderInfo->sf[coderInfo->bandcnt] +=
                   FAAC_LRINT(FAAC_LOG10(etot) * (0.5 * sfstep));
               coderInfo->bandcnt++;
               continue;
           }
 
           sfac = FAAC_LRINT(FAAC_LOG10(bandqual[sb] / rmsx) * sfstep);
-          coderInfo->sf[coderInfo->bandcnt] = SF_OFFSET - sfac;
-
-          if ((SF_OFFSET - sfac) < 10) sfacfix = (faac_real)0.0;
-          else sfacfix = FAAC_POW(10, (faac_real)sfac / sfstep);
       } else {
           sfac = SF_OFFSET - coderInfo->sf[coderInfo->bandcnt];
-          if (coderInfo->sf[coderInfo->bandcnt] < 10) sfacfix = (faac_real)0.0;
-          else sfacfix = FAAC_POW(10, (faac_real)sfac / sfstep);
       }
+
+      if ((SF_OFFSET - sfac) < 10) sfacfix = (faac_real)0.0;
+      else sfacfix = FAAC_POW(10, (faac_real)sfac / sfstep);
 
       end -= start;
       xi = xitab;
@@ -265,6 +262,7 @@ static void qlevel(CoderInfo * __restrict coderInfo,
           }
       }
       huffbook(coderInfo, xitab, gsize * end);
+      if (!final_pass) coderInfo->sf[coderInfo->bandcnt] += SF_OFFSET - sfac;
       coderInfo->bandcnt++;
     }
 }

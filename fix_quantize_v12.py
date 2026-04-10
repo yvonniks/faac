@@ -2,7 +2,6 @@ import re
 
 content = open('libfaac/quantize.c').read()
 
-# Update qlevel to support two passes
 new_qlevel = """static void qlevel(CoderInfo * __restrict coderInfo,
                    const faac_real * __restrict xr0,
                    const faac_real * __restrict bandqual,
@@ -64,7 +63,7 @@ new_qlevel = """static void qlevel(CoderInfo * __restrict coderInfo,
           if (bandqual[sb] < pnsthr)
           {
               coderInfo->book[coderInfo->bandcnt] = HCB_PNS;
-              coderInfo->sf[coderInfo->bandcnt] +=
+              coderInfo->sf[coderInfo->bandcnt] =
                   FAAC_LRINT(FAAC_LOG10(etot) * (0.5 * sfstep));
               coderInfo->bandcnt++;
               continue;
@@ -106,7 +105,6 @@ new_qlevel = """static void qlevel(CoderInfo * __restrict coderInfo,
     }
 }"""
 
-# Update BlocQuant to implement two passes
 new_bloc_quant = """int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantCfg *aacquantCfg)
 {
     faac_real bandlvl[MAX_SCFAC_BANDS];
@@ -140,7 +138,7 @@ new_bloc_quant = """int BlocQuant(CoderInfo * __restrict coder, faac_real * __re
         }
     }
 
-    // Clamping loop - matches writesf logic in huff2.c
+    // Clamping loop
     lastsf = coder->global_gain;
     lastis = 0;
     lastpns = coder->global_gain - 90;
@@ -183,7 +181,7 @@ new_bloc_quant = """int BlocQuant(CoderInfo * __restrict coder, faac_real * __re
         }
     }
 
-    // Pass 2: Final quantization if any scale factor was changed by clamping
+    // Pass 2: Final quantization if any SF changed
     if (changed)
     {
         coder->datacnt = 0;
