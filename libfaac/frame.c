@@ -31,6 +31,7 @@
 #include "util.h"
 #include "tns.h"
 #include "stereo.h"
+#include "pseudo_sbr.h"
 
 #if (defined WIN32 || defined _WIN32 || defined WIN64 || defined _WIN64) && !defined(PACKAGE_VERSION)
 #include "win32_ver.h"
@@ -152,6 +153,7 @@ int FAACAPI faacEncSetConfiguration(faacEncHandle hpEncoder,
     hEncoder->config.jointmode = config->jointmode;
     hEncoder->config.useLfe = config->useLfe;
     hEncoder->config.useTns = config->useTns;
+    hEncoder->config.usePseudoSBR = config->usePseudoSBR;
     hEncoder->config.aacObjectType = config->aacObjectType;
     hEncoder->config.mpegVersion = config->mpegVersion;
     hEncoder->config.outputFormat = config->outputFormat;
@@ -295,6 +297,12 @@ faacEncHandle FAACAPI faacEncOpen(unsigned long sampleRate,
     hEncoder->config.pnslevel = 4;
     hEncoder->config.useLfe = 1;
     hEncoder->config.useTns = 0;
+    hEncoder->config.usePseudoSBR = 1;
+
+    /* Seed deterministically from sampleRate: same rate → same noise sequence
+       → reproducible bitstream / stable MD5. */
+    hEncoder->sbrRandState = 0xDEADBEEFu ^ (uint32_t)(sampleRate * 31337u);
+
     hEncoder->config.bitRate = 64000;
     hEncoder->config.bandWidth = CalcBandwidth(hEncoder->config.bitRate, sampleRate);
     hEncoder->config.quantqual = 0;
@@ -506,12 +514,6 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
     if (hEncoder->frameNum <= 3) /* Still filling up the buffers */
         return 0;
 
-    /* Psychoacoustics */
-    hEncoder->psymodel->PsyCalculate(channelInfo, &hEncoder->gpsyInfo, hEncoder->psyInfo,
-        hEncoder->srInfo->cb_width_long, hEncoder->srInfo->num_cb_long,
-        hEncoder->srInfo->cb_width_short,
-        hEncoder->srInfo->num_cb_short, numChannels, (faac_real)hEncoder->aacquantCfg.quality / DEFQUAL);
-
     hEncoder->psymodel->BlockSwitch(coderInfo, hEncoder->psyInfo, numChannels);
 
     /* force block type */
@@ -568,6 +570,39 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
         }
     }
 
+    /* Pseudo-SBR: synthesise spectral content above the natural bandwidth.
+       Only fires in ABR mode when naturalBW < 40% Nyquist (low bitrates).
+       Placed after FilterBank() and before Psychoacoustic() so the synthesized
+       bands get analyzed and processed as part of the normal pipeline. */
+    if (hEncoder->config.usePseudoSBR && hEncoder->config.bitRate) {
+        unsigned int naturalBW = hEncoder->config.bandWidth;
+        if (PseudoSBRShouldEnable(naturalBW, hEncoder->sampleRate,
+                                   hEncoder->config.bitRate)) {
+            unsigned int targetBW = PseudoSBRTargetBW(naturalBW,
+                hEncoder->sampleRate, hEncoder->config.bitRate);
+            if (targetBW > naturalBW + SBR_MIN_EXTENSION) {
+                for (channel = 0; channel < numChannels; channel++) {
+                    if (channelInfo[channel].type != ELEMENT_LFE) {
+                        PseudoSBR(&coderInfo[channel],
+                                   hEncoder->freqBuff[channel],
+                                   hEncoder->sampleRate,
+                                   naturalBW, targetBW,
+                                   hEncoder->config.bitRate,
+                                   hEncoder->srInfo->cb_width_long,
+                                   hEncoder->srInfo->num_cb_long,
+                                   &hEncoder->sbrRandState);
+                    }
+                }
+            }
+        }
+    }
+
+    /* Psychoacoustics */
+    hEncoder->psymodel->PsyCalculate(channelInfo, &hEncoder->gpsyInfo, hEncoder->psyInfo,
+        hEncoder->srInfo->cb_width_long, hEncoder->srInfo->num_cb_long,
+        hEncoder->srInfo->cb_width_short,
+        hEncoder->srInfo->num_cb_short, numChannels, (faac_real)hEncoder->aacquantCfg.quality / DEFQUAL);
+
     /* Perform TNS analysis and filtering */
     for (channel = 0; channel < numChannels; channel++) {
         if ((channelInfo[channel].type != ELEMENT_LFE) && (useTns)) {
@@ -598,21 +633,6 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
                   &(hEncoder->aacquantCfg));
     }
 
-    // fix max_sfb in CPE mode
-    for (channel = 0; channel < numChannels; channel++)
-    {
-		if (channelInfo[channel].present
-				&& (channelInfo[channel].type == ELEMENT_CPE)
-				&& (channelInfo[channel].ch_is_left))
-		{
-			CoderInfo *cil, *cir;
-
-			cil = &coderInfo[channel];
-			cir = &coderInfo[channelInfo[channel].paired_ch];
-
-                        cil->sfbn = cir->sfbn = max(cil->sfbn, cir->sfbn);
-		}
-    }
     /* Write the AAC bitstream */
     bitStream = OpenBitStream(bufferSize, outputBuffer);
 
