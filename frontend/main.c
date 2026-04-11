@@ -1047,9 +1047,9 @@ int main(int argc, char *argv[])
         fprintf(stderr, " + PNS");
 
     /* Only show Pseudo-SBR when it will actually fire: enabled
-       and natural bandwidth below 90% of Nyquist (the in-encoder threshold). */
+       and natural bandwidth below 95% of Nyquist (the in-encoder threshold). */
     if (myFormat->usePseudoSBR &&
-            myFormat->bandWidth * 100u < (infile->samplerate / 2u) * 90u)
+            myFormat->bandWidth * 100u < (infile->samplerate / 2u) * 100u)
         fprintf(stderr, " + Pseudo-SBR");
 
     fprintf(stderr, "\n");

@@ -577,7 +577,7 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
     }
 
     /* Pseudo-SBR: synthesise spectral content above the natural bandwidth.
-       Only fires when naturalBW < 90% Nyquist (low bitrates/VBR limited BW).
+       Only fires when naturalBW < 100% Nyquist (low bitrates/VBR limited BW).
        Placed after FilterBank() and before TnsEncode/BlocQuant so the synthesized
        bands get analyzed and processed as part of the normal pipeline. */
     if (hEncoder->config.usePseudoSBR) {
