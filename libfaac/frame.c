@@ -577,10 +577,10 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
     }
 
     /* Pseudo-SBR: synthesise spectral content above the natural bandwidth.
-       Only fires in ABR mode when naturalBW < 40% Nyquist (low bitrates).
+       Only fires when naturalBW < 90% Nyquist (low bitrates/VBR limited BW).
        Placed after FilterBank() and before TnsEncode/BlocQuant so the synthesized
        bands get analyzed and processed as part of the normal pipeline. */
-    if (hEncoder->config.usePseudoSBR && hEncoder->config.bitRate) {
+    if (hEncoder->config.usePseudoSBR) {
         unsigned int naturalBW = hEncoder->config.bandWidth;
         if (PseudoSBRShouldEnable(naturalBW, hEncoder->sampleRate,
                                    hEncoder->config.bitRate)) {
@@ -594,8 +594,7 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
                                    hEncoder->sampleRate,
                                    naturalBW, targetBW,
                                    hEncoder->config.bitRate,
-                                   hEncoder->srInfo->cb_width_long,
-                                   hEncoder->srInfo->num_cb_long,
+                                   hEncoder->srInfo,
                                    &hEncoder->sbrRandState);
                     }
                 }

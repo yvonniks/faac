@@ -30,7 +30,7 @@
  * ---------------------------------------------------------------------- */
 #define MAX_SBR_PATCHES   4
 #define SBR_PATCH_ROLLOFF 0.50f   /* –6 dB gain per subsequent patch       */
-#define SBR_FILL_THRESH   50u     /* disable if naturalBW > 50% of Nyquist */
+#define SBR_FILL_THRESH   90u     /* disable if naturalBW > 90% of Nyquist */
 #define SBR_NOISE_OFFSET  0.05f   /* minimum noise injection fraction       */
 #define SBR_NOISE_SLOPE   0.20f   /* noise scales by (1-tonality) * slope   */
 #define SBR_PAPR_WINDOW   64      /* bins below bw_bin used for PAPR        */
@@ -91,6 +91,64 @@ static int bw_to_bin(unsigned int bw_hz, unsigned long sampleRate, int frame_len
     return (int)((unsigned long long)bw_hz * 2ULL * (unsigned long)frame_len / sampleRate);
 }
 
+/* Internal implementation for one window */
+static void ApplyPseudoSBR(faac_real *freq, int bw_bin, int tgt_bin, uint32_t *randState)
+{
+    int papr_start;
+    float tonality, noise_mix;
+    float cumulative_gain = 1.0f;
+    int dst = bw_bin;
+    int patch, p;
+
+    /* ------------------------------------------------------------------
+     * Tonality calculation using PAPR.
+     * ------------------------------------------------------------------ */
+    papr_start = bw_bin - SBR_PAPR_WINDOW;
+    if (papr_start < 0) papr_start = 0;
+    tonality = compute_tonality(freq, papr_start, bw_bin);
+    noise_mix = SBR_NOISE_OFFSET + (1.0f - tonality) * SBR_NOISE_SLOPE;
+
+    /* ------------------------------------------------------------------
+     * Patch loop: fill [bw_bin, tgt_bin) with copies of the source region.
+     * ------------------------------------------------------------------ */
+    for (patch = 0; patch < MAX_SBR_PATCHES && dst < tgt_bin; patch++) {
+        int remaining   = tgt_bin - dst;
+        /* Use a fixed patch size for consistent transposition, but cap by available bandwidth. */
+        int patch_size  = 128;
+        if (patch_size > bw_bin) patch_size = bw_bin;
+        if (patch_size > remaining) patch_size = remaining;
+        if (patch_size < MIN_PATCH_BINS) patch_size = remaining;
+
+        /* Transpose source window downward for each subsequent patch to avoid comb filtering. */
+        int src_start = bw_bin - patch_size * (patch + 1);
+        if (src_start < 0) src_start = 0;
+
+        float src_energy = 0.0f;
+        if (patch_size < MIN_PATCH_BINS) break;
+
+        for (p = 0; p < patch_size; p++)
+            src_energy += (float)(freq[src_start + p] * freq[src_start + p]);
+
+        /* Correct noise scaling: noise_mix is desired energy ratio of noise to total. */
+        float noise_scale = (src_energy > 1e-15f && noise_mix < 0.99f)
+            ? sqrtf(12.0f * (src_energy / (float)patch_size) * (noise_mix / (1.0f - noise_mix)))
+            : 0.0f;
+
+        for (p = 0; p < patch_size; p++) {
+            float s = (float)freq[src_start + p] * cumulative_gain;
+            /* Noise floor should also follow the rolloff */
+            float n = lcg_float(randState) * noise_scale * cumulative_gain;
+            freq[dst + p] = (faac_real)(s + n);
+        }
+
+        dst             += patch_size;
+        cumulative_gain *= SBR_PATCH_ROLLOFF;
+    }
+
+    if (dst < tgt_bin)
+        memset(freq + dst, 0, (size_t)(tgt_bin - dst) * sizeof(faac_real));
+}
+
 /* -------------------------------------------------------------------------
  * Public API
  * ---------------------------------------------------------------------- */
@@ -99,9 +157,8 @@ int PseudoSBRShouldEnable(unsigned int naturalBW, unsigned long sampleRate,
                            unsigned long bitRate)
 {
     unsigned int nyquist;
+    (void)bitRate;
 
-    if (!bitRate)          /* VBR: naturalBW already = Nyquist */
-        return 0;
     if (!sampleRate)
         return 0;
 
@@ -132,10 +189,12 @@ unsigned int PseudoSBRTargetBW(unsigned int naturalBW, unsigned long sampleRate,
      * Derived from bitRate so it scales automatically as CalcBandwidth()
      * is re-tuned — no hard-coded Hz targets.
      */
-    if      (bitRate <= 16000) frac = 0.45f;
-    else if (bitRate <= 32000) frac = 0.35f;
-    else if (bitRate <= 48000) frac = 0.25f;
-    else if (bitRate <= 64000) frac = 0.15f;
+    if      (bitRate == 0)     frac = 0.35f; /* VBR fallback */
+    else if (bitRate <= 16000) frac = 0.55f;
+    else if (bitRate <= 32000) frac = 0.45f;
+    else if (bitRate <= 48000) frac = 0.35f;
+    else if (bitRate <= 64000) frac = 0.25f;
+    else if (bitRate <= 96000) frac = 0.15f;
     else                       frac = 0.0f;
 
     if (frac <= 0.0f)
@@ -152,30 +211,29 @@ void PseudoSBR(CoderInfo *coderInfo, faac_real *freq,
                unsigned long sampleRate,
                unsigned int baseBW, unsigned int targetBW,
                unsigned long bitRate,
-               const int *cb_width_long, int num_cb_long,
+               SR_INFO *srInfo,
                uint32_t *randState)
 {
     int bw_bin, tgt_bin;
-    int papr_start;
-    float tonality, noise_mix;
-    float rolloff;
-    int dst, sb, offset;
-    int patch, p;
+    int sb, offset;
+    int win;
+    int frame_len = (coderInfo->block_type == ONLY_SHORT_WINDOW) ? BLOCK_LEN_SHORT : BLOCK_LEN_LONG;
 
     (void)bitRate;
 
-    /* Only extend long-window blocks; short blocks are transients */
-    if (coderInfo->block_type != ONLY_LONG_WINDOW)
-        return;
-
-    bw_bin  = bw_to_bin(baseBW,   sampleRate, FRAME_LEN);
-    tgt_bin = bw_to_bin(targetBW, sampleRate, FRAME_LEN);
+    bw_bin  = bw_to_bin(baseBW,   sampleRate, frame_len);
+    tgt_bin = bw_to_bin(targetBW, sampleRate, frame_len);
 
     /* Clamp tgt_bin to the last valid scale-factor band end */
-    if (num_cb_long > 0) {
+    if (srInfo->num_cb_long > 0) {
         int max_bin = 0;
-        for (sb = 0; sb < num_cb_long; sb++)
-            max_bin += cb_width_long[sb];
+        if (coderInfo->block_type == ONLY_SHORT_WINDOW) {
+            for (sb = 0; sb < srInfo->num_cb_short; sb++)
+                max_bin += srInfo->cb_width_short[sb];
+        } else {
+            for (sb = 0; sb < srInfo->num_cb_long; sb++)
+                max_bin += srInfo->cb_width_long[sb];
+        }
         if (tgt_bin > max_bin)
             tgt_bin = max_bin;
     }
@@ -186,103 +244,36 @@ void PseudoSBR(CoderInfo *coderInfo, faac_real *freq,
     if (bw_bin <= MIN_PATCH_BINS)
         return;
 
-    /* ------------------------------------------------------------------
-     * Tonality calculation using PAPR.
-     * ------------------------------------------------------------------ */
-    papr_start = bw_bin - SBR_PAPR_WINDOW;
-    if (papr_start < 0) papr_start = 0;
-    tonality = compute_tonality(freq, papr_start, bw_bin);
-    noise_mix = SBR_NOISE_OFFSET + (1.0f - tonality) * SBR_NOISE_SLOPE;
-
-    /* ------------------------------------------------------------------
-     * Dynamic Spectral Tilt calculation.
-     * Measure energy slope of the top 4 scale factor bands.
-     * ------------------------------------------------------------------ */
-    rolloff = SBR_PATCH_ROLLOFF;
-    if (coderInfo->sfbn >= 8) {
-        float e[4];
-        int bands_found = 0;
-        for (sb = coderInfo->sfbn - 1; sb >= 0 && bands_found < 4; sb--) {
-            int start = coderInfo->sfb_offset[sb];
-            int end = coderInfo->sfb_offset[sb+1];
-            float sum = 0.0f;
-            for (p = start; p < end; p++)
-                sum += (float)(freq[p] * freq[p]);
-            e[bands_found++] = sum / (float)(end - start);
-        }
-        if (bands_found >= 2) {
-            float total_ratio = 0.0f;
-            for (p = 0; p < bands_found - 1; p++) {
-                if (e[p+1] > 1e-10f)
-                    total_ratio += e[p] / e[p+1];
-                else
-                    total_ratio += 1.0f;
-            }
-            float avg_ratio = total_ratio / (float)(bands_found - 1);
-            rolloff = sqrtf(avg_ratio);
-            /* Clamp rolloff to sensible range (-12dB to 0dB) */
-            if (rolloff > 1.0f) rolloff = 1.0f;
-            if (rolloff < 0.25f) rolloff = 0.25f;
-        }
-    }
-
-    /* ------------------------------------------------------------------
-     * Patch loop: fill [bw_bin, tgt_bin) with copies of the source region.
-     * ------------------------------------------------------------------ */
-    float cumulative_gain = 1.0f;
-    dst = bw_bin;
-
-    for (patch = 0; patch < MAX_SBR_PATCHES && dst < tgt_bin; patch++) {
-        int remaining   = tgt_bin - dst;
-        /* Use a fixed patch size for consistent transposition, but cap by available bandwidth.
-           A size of 128 bins (approx 2.7kHz at 44.1kHz) matches AAC spectral structures. */
-        int patch_size  = 128;
-        if (patch_size > bw_bin) patch_size = bw_bin;
-        if (patch_size > remaining) patch_size = remaining;
-        if (patch_size < MIN_PATCH_BINS) patch_size = remaining;
-
-        /* Transpose source window downward for each subsequent patch to avoid comb filtering. */
-        int src_start = bw_bin - patch_size * (patch + 1);
-        if (src_start < 0) src_start = 0;
-
-        float src_energy = 0.0f;
-        if (patch_size < MIN_PATCH_BINS) break;
-
-        for (p = 0; p < patch_size; p++)
-            src_energy += (float)(freq[src_start + p] * freq[src_start + p]);
-
-        /* Correct noise scaling: noise_mix is desired energy ratio of noise to total.
-           noise_energy = patch_energy * noise_mix / (1 - noise_mix).
-           Our uniform PRNG has variance 1/12. noise_scale^2 / 12 = noise_energy_density. */
-        float noise_scale = (src_energy > 1e-15f && noise_mix < 0.99f)
-            ? sqrtf(12.0f * (src_energy / (float)patch_size) * (noise_mix / (1.0f - noise_mix)))
-            : 0.0f;
-
-        for (p = 0; p < patch_size; p++) {
-            float s = (float)freq[src_start + p] * cumulative_gain;
-            /* Noise floor should also follow the rolloff */
-            float n = lcg_float(randState) * noise_scale * cumulative_gain;
-            freq[dst + p] = (faac_real)(s + n);
+    if (coderInfo->block_type == ONLY_SHORT_WINDOW) {
+        for (win = 0; win < 8; win++) {
+            ApplyPseudoSBR(freq + win * BLOCK_LEN_SHORT, bw_bin, tgt_bin, randState);
         }
 
-        dst             += patch_size;
-        cumulative_gain *= rolloff;
+        /* Extend sfbn and sfb_offset[] for short blocks if they are interleaved */
+        sb     = coderInfo->sfbn;
+        offset = coderInfo->sfb_offset[sb];
+
+        while (sb < srInfo->num_cb_short && sb < NSFB_SHORT && offset < tgt_bin) {
+            coderInfo->sfb_offset[sb + 1] = offset + srInfo->cb_width_short[sb];
+            offset = coderInfo->sfb_offset[sb + 1];
+            sb++;
+        }
+        coderInfo->sfbn = sb;
+    } else {
+        ApplyPseudoSBR(freq, bw_bin, tgt_bin, randState);
+
+        /* ------------------------------------------------------------------
+         * Extend sfbn and sfb_offset[] to cover tgt_bin.
+         * ------------------------------------------------------------------ */
+        sb     = coderInfo->sfbn;
+        offset = coderInfo->sfb_offset[sb];
+
+        while (sb < srInfo->num_cb_long && sb < NSFB_LONG && offset < tgt_bin) {
+            coderInfo->sfb_offset[sb + 1] = offset + srInfo->cb_width_long[sb];
+            offset = coderInfo->sfb_offset[sb + 1];
+            sb++;
+        }
+
+        coderInfo->sfbn = sb;
     }
-
-    if (dst < tgt_bin)
-        memset(freq + dst, 0, (size_t)(tgt_bin - dst) * sizeof(faac_real));
-
-    /* ------------------------------------------------------------------
-     * Extend sfbn and sfb_offset[] to cover tgt_bin.
-     * ------------------------------------------------------------------ */
-    sb     = coderInfo->sfbn;
-    offset = coderInfo->sfb_offset[sb];
-
-    while (sb < num_cb_long && sb < NSFB_LONG && offset < tgt_bin) {
-        coderInfo->sfb_offset[sb + 1] = offset + cb_width_long[sb];
-        offset = coderInfo->sfb_offset[sb + 1];
-        sb++;
-    }
-
-    coderInfo->sfbn = sb;
 }

@@ -24,8 +24,7 @@
 
 /*
  * Returns 1 if pseudo-SBR is useful for the given configuration:
- *   - bitRate > 0  (ABR mode; VBR already encodes full bandwidth)
- *   - naturalBW < 40% of Nyquist  (room to extend)
+ *   - naturalBW < threshold% of Nyquist  (room to extend)
  */
 int PseudoSBRShouldEnable(unsigned int naturalBW, unsigned long sampleRate,
                            unsigned long bitRate);
@@ -45,15 +44,13 @@ unsigned int PseudoSBRTargetBW(unsigned int naturalBW, unsigned long sampleRate,
  * - Extends coderInfo->sfbn and sfb_offset[] to cover targetBW.
  *
  * Must be called after MDCT and before TnsEncode() and AACstereo().
- * Only operates on ONLY_LONG_WINDOW frames; returns immediately for short blocks.
- *
- * cb_width_long / num_cb_long come from hEncoder->srInfo.
+ * Operates on both long and short windows.
  */
 void PseudoSBR(CoderInfo *coderInfo, faac_real *freq,
                unsigned long sampleRate,
                unsigned int baseBW, unsigned int targetBW,
                unsigned long bitRate,
-               const int *cb_width_long, int num_cb_long,
+               SR_INFO *srInfo,
                uint32_t *randState);
 
 #endif /* PSEUDO_SBR_H */
