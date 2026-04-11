@@ -23,21 +23,16 @@
 #include "stereo.h"
 #include "huff2.h"
 
-static inline float fast_log2(float x)
-{
-    union { float f; int i; } vx = { x };
-    float y = (float)vx.i;
-    y *= 1.1920928955078125e-7f;
-    return y - 126.94269504f;
-}
+#define LOG2_CONST 3.32192809489f
 
-static void mixed_mode(CoderInfo *cl, CoderInfo *cr, ChannelInfo *chi, ChannelInfo *chr,
+static void mixed_mode(CoderInfo *cl, CoderInfo *cr, ChannelInfo *chi,
                        faac_real *sl0, faac_real *sr0, int *sfcnt,
-                       int wstart, int wend, float quality)
+                       int wstart, int wend, faac_real quality)
 {
     int sfb;
     int win;
     int sfmin = (cl->block_type == ONLY_SHORT_WINDOW) ? 1 : 8;
+    const faac_real step = 10/1.50515;
 
     for (sfb = 0; sfb < sfmin; sfb++) {
         chi->msInfo.ms_used[*sfcnt] = 0;
@@ -46,7 +41,7 @@ static void mixed_mode(CoderInfo *cl, CoderInfo *cr, ChannelInfo *chi, ChannelIn
 
     for (sfb = sfmin; sfb < cl->sfbn; sfb++) {
         int l, start, end;
-        faac_real enrgl = 0, enrgr = 0, enrgm = 0, enrgs = 0, correl = 0;
+        faac_real enrgl = 0, enrgr = 0, correl = 0;
         start = cl->sfb_offset[sfb];
         end = cl->sfb_offset[sfb + 1];
         int len = end - start;
@@ -57,27 +52,26 @@ static void mixed_mode(CoderInfo *cl, CoderInfo *cr, ChannelInfo *chi, ChannelIn
             for (l = start; l < end; l++) {
                 faac_real lx = sl[l];
                 faac_real rx = sr[l];
-                faac_real m = 0.5f * (lx + rx);
-                faac_real s = 0.5f * (lx - rx);
                 enrgl += lx * lx;
                 enrgr += rx * rx;
-                enrgm += m * m;
-                enrgs += s * s;
                 correl += lx * rx;
             }
         }
 
-        float bits_lr = 0.5f * len * (fast_log2(enrgl/len + 1.0f) + fast_log2(enrgr/len + 1.0f));
-        float bits_ms = 0.5f * len * (fast_log2(enrgm/len + 1.0f) + fast_log2(enrgs/len + 1.0f));
-        float bits_is = 0.5f * len * (fast_log2((enrgl + enrgr)/len + 1.0f));
+        faac_real enrgm = 0.25f * (enrgl + enrgr + 2.0f * correl);
+        faac_real enrgs = 0.25f * (enrgl + enrgr - 2.0f * correl);
+
+        float bits_lr = 0.5f * len * (float)((FAAC_LOG10(enrgl/len + 1.0f) + FAAC_LOG10(enrgr/len + 1.0f)) * LOG2_CONST);
+        float bits_ms = 0.5f * len * (float)((FAAC_LOG10(enrgm/len + 1.0f) + FAAC_LOG10(enrgs/len + 1.0f)) * LOG2_CONST);
+        float bits_is = 0.5f * len * (float)(FAAC_LOG10(enrgm/len + 1.0f) * LOG2_CONST);
 
         float r = 0;
-        if (enrgl > 0 && enrgr > 0)
-            r = correl / sqrtf(enrgl * enrgr);
+        if (enrgl > 1e-15f && enrgr > 1e-15f)
+            r = (float)(correl / FAAC_SQRT(enrgl * enrgr));
 
         float is_penalty = 1.10f;
         if (cl->block_type == ONLY_SHORT_WINDOW) is_penalty *= 1.15f;
-        if (quality > 100) is_penalty *= 1.10f;
+        if (quality > 1.0f) is_penalty *= 1.10f;
         bits_is *= is_penalty;
 
         int use_ms = (bits_ms < bits_lr);
@@ -85,9 +79,10 @@ static void mixed_mode(CoderInfo *cl, CoderInfo *cr, ChannelInfo *chi, ChannelIn
 
         if (use_is) {
             faac_real efix = enrgl + enrgr;
-            faac_real vfix = sqrtf(efix / (enrgl + enrgr + 1e-9f));
-            int sf = (int)(log10f(max(enrgl, 1e-9f) / (efix + 1e-9f)) * (10/1.50515f));
-            int pan = (int)(log10f(max(enrgr, 1e-9f) / (efix + 1e-9f)) * (10/1.50515f)) - sf;
+            faac_real enrgs_legacy = 4.0f * enrgm;
+            faac_real vfix = FAAC_SQRT(efix / (enrgs_legacy + 1e-15f));
+            int sf = FAAC_LRINT(FAAC_LOG10(max(enrgl, 1e-15f) / (efix + 1e-15f)) * step);
+            int pan = FAAC_LRINT(FAAC_LOG10(max(enrgr, 1e-15f) / (efix + 1e-15f)) * step) - sf;
 
             if (pan <= 30 && pan >= -30) {
                 cl->sf[*sfcnt] = sf;
@@ -97,7 +92,8 @@ static void mixed_mode(CoderInfo *cl, CoderInfo *cr, ChannelInfo *chi, ChannelIn
                     faac_real *sl = sl0 + win * BLOCK_LEN_SHORT;
                     faac_real *sr = sr0 + win * BLOCK_LEN_SHORT;
                     for (l = start; l < end; l++) {
-                        sl[l] = (sl[l] + sr[l]) * vfix;
+                        faac_real sum = sl[l] + sr[l];
+                        sl[l] = sum * vfix;
                         sr[l] = 0;
                     }
                 }
@@ -115,8 +111,8 @@ static void mixed_mode(CoderInfo *cl, CoderInfo *cr, ChannelInfo *chi, ChannelIn
                 for (l = start; l < end; l++) {
                     faac_real lx = sl[l];
                     faac_real rx = sr[l];
-                    sl[l] = lx + rx;
-                    sr[l] = lx - rx;
+                    sl[l] = 0.5f * (lx + rx);
+                    sr[l] = 0.5f * (lx - rx);
                 }
             }
         } else if (!use_is) {
@@ -470,7 +466,7 @@ void AACstereo(CoderInfo *coder,
                 stereo(coder + chn, coder + rch, s[chn], s[rch], &sfcnt, start, end, isthr);
                 break;
             case JOINT_MIXED:
-                mixed_mode(coder + chn, coder + rch, channel + chn, channel + rch, s[chn], s[rch], &sfcnt, start, end, quality);
+                mixed_mode(coder + chn, coder + rch, channel + chn, s[chn], s[rch], &sfcnt, start, end, quality);
                 break;
             }
             start = end;

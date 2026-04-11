@@ -15,13 +15,15 @@ Where:
 - $Energy$: Sum of squares of the coefficients.
 - $+ 1.0$: A stabilizer to ensure $\log_2 \ge 0$ and prevent singularities at zero energy.
 
+For stability in divisions and log arguments, a floor of `1e-15` is used (close to double precision epsilon).
+
 ### 2. Decision Logic
 For each scalefactor band, we compare three candidates:
 1. **L/R (Independent):** $Cost_{LR} = Cost(Left) + Cost(Right)$
 2. **M/S (Mid/Side):** $Cost_{MS} = Cost(Mid) + Cost(Side)$
-3. **IS (Intensity Stereo):** $Cost_{IS} = Cost(Sum) \times (1.0 + Penalty)$
+3. **IS (Intensity Stereo):** $Cost_{IS} = Cost(Sum) \times Penalty$
 
-The mode with the minimum cost is selected.
+Where $Cost(Sum)$ uses the energy of the $L+R$ signal ($4 \times Energy_{Mid}$). The mode with the minimum cost is selected.
 
 ### 3. Safety Constraints and Penalties
 To avoid artifacts common in joint stereo (e.g., spatial imaging collapse or "pumping"), we implemented the following heuristic safeguards:
