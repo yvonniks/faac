@@ -35,7 +35,7 @@
 #define SBR_NOISE_OFFSET  0.05f   /* minimum noise injection fraction       */
 #define SBR_NOISE_SLOPE   0.20f   /* noise scales by (1-tonality) * slope   */
 #define SBR_PAPR_WINDOW   64      /* bins below bw_bin used for PAPR        */
-#define MIN_PATCH_BINS    8       /* don't bother with very small patches   */
+#define MIN_PATCH_BINS    1       /* allow small extensions                 */
 
 /* -------------------------------------------------------------------------
  * Internal helpers
@@ -177,15 +177,19 @@ unsigned int PseudoSBRTargetBW(unsigned int naturalBW, unsigned long sampleRate,
 
     gap = nyquist - naturalBW;
 
-    if      (bitRate == 0)      frac = 0.50f; /* VBR fallback */
+    /*
+     * Extension fraction: how much of the gap to fill.
+     * Higher bitrates allow for more extension bits.
+     */
+    if      (bitRate == 0)      frac = 0.45f; /* VBR fallback */
     else if (bitRate <= 16000)  frac = 0.65f;
     else if (bitRate <= 32000)  frac = 0.55f;
     else if (bitRate <= 48000)  frac = 0.50f;
-    else if (bitRate <= 64000)  frac = 0.35f;
-    else if (bitRate <= 96000)  frac = 0.25f;
-    else if (bitRate <= 128000) frac = 0.15f;
-    else if (bitRate <= 160000) frac = 0.10f;
-    else                        frac = 0.0f;
+    else if (bitRate <= 64000)  frac = 0.45f;
+    else if (bitRate <= 96000)  frac = 0.35f;
+    else if (bitRate <= 128000) frac = 0.25f;
+    else if (bitRate <= 160000) frac = 0.15f;
+    else                        frac = 0.05f;
 
     if (frac <= 0.0f)
         return naturalBW;
@@ -256,8 +260,8 @@ void PseudoSBR(CoderInfo *coderInfo, faac_real *freq,
         sb     = coderInfo->sfbn;
         offset = coderInfo->sfb_offset[sb];
 
-        while (sb < srInfo->num_cb_long && sb < NSFB_LONG && offset < tgt_bin) {
-            coderInfo->sfb_offset[sb + 1] = offset + srInfo->cb_width_long[sb];
+        while (sb < num_cb_long && sb < NSFB_LONG && offset < tgt_bin) {
+            coderInfo->sfb_offset[sb + 1] = offset + cb_width_long[sb];
             offset = coderInfo->sfb_offset[sb + 1];
             sb++;
         }
