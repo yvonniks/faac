@@ -20,7 +20,6 @@
 #include <math.h>
 #include <string.h>
 #include <stdint.h>
-#include <stdio.h>
 
 #include "pseudo_sbr.h"
 #include "coder.h"
@@ -260,8 +259,8 @@ void PseudoSBR(CoderInfo *coderInfo, faac_real *freq,
         sb     = coderInfo->sfbn;
         offset = coderInfo->sfb_offset[sb];
 
-        while (sb < num_cb_long && sb < NSFB_LONG && offset < tgt_bin) {
-            coderInfo->sfb_offset[sb + 1] = offset + cb_width_long[sb];
+        while (sb < srInfo->num_cb_long && sb < NSFB_LONG && offset < tgt_bin) {
+            coderInfo->sfb_offset[sb + 1] = offset + srInfo->cb_width_long[sb];
             offset = coderInfo->sfb_offset[sb + 1];
             sb++;
         }
