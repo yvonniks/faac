@@ -215,6 +215,7 @@ int FAACAPI faacEncSetConfiguration(faacEncHandle hpEncoder,
     }
 
     hEncoder->config.bandWidth = config->bandWidth;
+    if (hEncoder->config.useSbr && (hEncoder->sampleRate == 48000)) hEncoder->config.bandWidth = (hEncoder->config.bandWidth * 3) / 4;
 
     // check bandwidth
     if (hEncoder->config.bandWidth < 100)
@@ -283,8 +284,6 @@ faacEncHandle FAACAPI faacEncOpen(unsigned long sampleRate,
     hEncoder->numChannels = numChannels;
     hEncoder->sampleRate = sampleRate;
     hEncoder->sampleRateIdx = GetSRIndex(sampleRate);
-
-    /* Initialize Pseudo SBR state */
     hEncoder->sbrRandState = (unsigned int)sampleRate;
 
     /* Initialize variables to default values */
@@ -553,7 +552,7 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
         if (coderInfo[channel].block_type == ONLY_SHORT_WINDOW) {
             coderInfo[channel].sfbn_native = hEncoder->aacquantCfg.max_cbs;
             coderInfo[channel].sfbn = coderInfo[channel].sfbn_native;
-            if (hEncoder->config.useSbr && (hEncoder->config.bandWidth < (hEncoder->sampleRate / 2))) {
+            if (hEncoder->config.useSbr && (hEncoder->sampleRate == 48000)) {
                 coderInfo[channel].sfbn = hEncoder->srInfo->num_cb_short;
             }
 
@@ -567,7 +566,7 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
         } else {
             coderInfo[channel].sfbn_native = hEncoder->aacquantCfg.max_cbl;
             coderInfo[channel].sfbn = coderInfo[channel].sfbn_native;
-            if (hEncoder->config.useSbr && (hEncoder->config.bandWidth < (hEncoder->sampleRate / 2))) {
+            if (hEncoder->config.useSbr && (hEncoder->sampleRate == 48000)) {
                 coderInfo[channel].sfbn = hEncoder->srInfo->num_cb_long;
             }
 
@@ -580,19 +579,6 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
                 offset += hEncoder->srInfo->cb_width_long[sb];
             }
             coderInfo[channel].sfb_offset[sb] = offset;
-        }
-    }
-
-    /* Pseudo SBR */
-    if (hEncoder->config.useSbr) {
-        for (channel = 0; channel < numChannels; channel++) {
-            PseudoSBR(hEncoder, &coderInfo[channel], hEncoder->freqBuff[channel]);
-            if (hEncoder->frameNum == 5) {
-                printf("BW: %d, sfbn_native: %d, sfbn: %d, type: %d\n",
-                       hEncoder->config.bandWidth, coderInfo[channel].sfbn_native,
-                       coderInfo[channel].sfbn, coderInfo[channel].block_type);
-            }
-
         }
     }
 
@@ -620,6 +606,13 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
 
     AACstereo(coderInfo, channelInfo, hEncoder->freqBuff, numChannels,
               (faac_real)hEncoder->aacquantCfg.quality/DEFQUAL, jointmode);
+
+    /* Pseudo SBR */
+    if (hEncoder->config.useSbr && (hEncoder->sampleRate == 48000)) {
+        for (channel = 0; channel < numChannels; channel++) {
+            PseudoSBR(hEncoder, &coderInfo[channel], hEncoder->freqBuff[channel]);
+        }
+    }
 
     for (channel = 0; channel < numChannels; channel++) {
         BlocQuant(&coderInfo[channel], hEncoder->freqBuff[channel],

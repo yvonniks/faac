@@ -45,7 +45,7 @@ static void stereo(CoderInfo *cl, CoderInfo *cr,
 
     (*sfcnt) += sfmin;
 
-    for (sfb = sfmin; sfb < cl->sfbn; sfb++)
+    for (sfb = sfmin; sfb < cl->sfbn_native; sfb++)
     {
         int l, start, end;
         faac_real sum, diff;
@@ -168,7 +168,7 @@ static void midside(CoderInfo *coder, ChannelInfo *channel,
         channel->msInfo.ms_used[*sfcnt] = 0;
         (*sfcnt)++;
     }
-    for (sfb = sfmin; sfb < coder->sfbn; sfb++)
+    for (sfb = sfmin; sfb < coder->sfbn_native; sfb++)
     {
         int ms = 0;
         int l, start, end;
@@ -323,7 +323,7 @@ void AACstereo(CoderInfo *coder,
         for (group = 0; group < cp->groups.n; group++)
         {
             int band;
-            for (band = 0; band < cp->sfbn; band++)
+            for (band = 0; band < cp->sfbn_native; band++)
             {
                 cp->book[bookcnt] = HCB_NONE;
                 cp->sf[bookcnt] = 0;
