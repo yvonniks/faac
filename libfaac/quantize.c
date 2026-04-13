@@ -201,6 +201,10 @@ static void qlevel(CoderInfo * __restrict coderInfo,
       if (coderInfo->book[coderInfo->bandcnt] != HCB_NONE)
       {
           coderInfo->bandcnt++;
+          if (sb >= coderInfo->sfbn_native) { printf("SBR Band %d: book %d\n", sb, HCB_PNS);
+              printf("SBR Band %d: book %d, sf %d\n", sb, coderInfo->book[coderInfo->bandcnt], coderInfo->sf[coderInfo->bandcnt]);
+          }
+
           continue;
       }
 
@@ -219,6 +223,19 @@ static void qlevel(CoderInfo * __restrict coderInfo,
           continue;
       }
 
+      if (sb >= coderInfo->sfbn_native)
+      {
+          coderInfo->book[coderInfo->bandcnt] = HCB_PNS;
+          coderInfo->sf[coderInfo->bandcnt] =
+              FAAC_LRINT(FAAC_LOG10(etot + 1e-6) * (0.5 * sfstep));
+          coderInfo->bandcnt++;
+          if (sb >= coderInfo->sfbn_native) { printf("SBR Band %d: book %d\n", sb, HCB_PNS);
+              printf("SBR Band %d: book %d, sf %d\n", sb, coderInfo->book[coderInfo->bandcnt], coderInfo->sf[coderInfo->bandcnt]);
+          }
+
+          continue;
+      }
+
       if ((rmsx < NOISEFLOOR) || (!bandqual[sb]))
       {
           coderInfo->book[coderInfo->bandcnt++] = HCB_ZERO;
@@ -231,6 +248,10 @@ static void qlevel(CoderInfo * __restrict coderInfo,
           coderInfo->sf[coderInfo->bandcnt] +=
               FAAC_LRINT(FAAC_LOG10(etot) * (0.5 * sfstep));
           coderInfo->bandcnt++;
+          if (sb >= coderInfo->sfbn_native) { printf("SBR Band %d: book %d\n", sb, HCB_PNS);
+              printf("SBR Band %d: book %d, sf %d\n", sb, coderInfo->book[coderInfo->bandcnt], coderInfo->sf[coderInfo->bandcnt]);
+          }
+
           continue;
       }
 

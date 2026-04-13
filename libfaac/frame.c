@@ -583,12 +583,25 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
         }
     }
 
+    /* Pseudo SBR */
+    if (hEncoder->config.useSbr) {
+        for (channel = 0; channel < numChannels; channel++) {
+            PseudoSBR(hEncoder, &coderInfo[channel], hEncoder->freqBuff[channel]);
+            if (hEncoder->frameNum == 5) {
+                printf("BW: %d, sfbn_native: %d, sfbn: %d, type: %d\n",
+                       hEncoder->config.bandWidth, coderInfo[channel].sfbn_native,
+                       coderInfo[channel].sfbn, coderInfo[channel].block_type);
+            }
+
+        }
+    }
+
     /* Perform TNS analysis and filtering */
     for (channel = 0; channel < numChannels; channel++) {
         if ((channelInfo[channel].type != ELEMENT_LFE) && (useTns)) {
             TnsEncode(&(coderInfo[channel].tnsInfo),
-                      coderInfo[channel].sfbn,
-                      coderInfo[channel].sfbn,
+                      coderInfo[channel].sfbn_native,
+                      coderInfo[channel].sfbn_native,
                       coderInfo[channel].block_type,
                       coderInfo[channel].sfb_offset,
                       hEncoder->freqBuff[channel], hEncoder->gpsyInfo.sharedWorkBuffLong);
@@ -607,13 +620,6 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
 
     AACstereo(coderInfo, channelInfo, hEncoder->freqBuff, numChannels,
               (faac_real)hEncoder->aacquantCfg.quality/DEFQUAL, jointmode);
-
-    /* Pseudo SBR */
-    if (hEncoder->config.useSbr) {
-        for (channel = 0; channel < numChannels; channel++) {
-            PseudoSBR(hEncoder, &coderInfo[channel], hEncoder->freqBuff[channel]);
-        }
-    }
 
     for (channel = 0; channel < numChannels; channel++) {
         BlocQuant(&coderInfo[channel], hEncoder->freqBuff[channel],

@@ -72,9 +72,9 @@ void PseudoSBR(faacEncStruct *hEncoder, CoderInfo *coderInfo, faac_real *freqBuf
                 xr[sfb_start + i] = xr[src_start + i];
             }
 
-            faac_real noise_fact = (faac_real)0.1;
-            if (papr > (faac_real)12.0) noise_fact = (faac_real)0.02;
-            else if (papr > (faac_real)6.0) noise_fact = (faac_real)0.05;
+            faac_real noise_fact = (faac_real)0.15;
+            if (papr > (faac_real)12.0) noise_fact = (faac_real)0.03;
+            else if (papr > (faac_real)6.0) noise_fact = (faac_real)0.08;
 
             faac_real noise_gain = FAAC_SQRT(avg_enrg) * noise_fact;
 

@@ -86,8 +86,6 @@ typedef struct {
 
     /* FFT Tables */
     FFT_Tables	fft_tables;
-
-    /* Pseudo SBR state */
     unsigned int sbrRandState;
 } faacEncStruct;
 
