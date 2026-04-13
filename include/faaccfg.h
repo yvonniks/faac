@@ -114,6 +114,7 @@ typedef struct faacEncConfiguration
 
     /* block type enforcing (SHORTCTL_NORMAL/SHORTCTL_NOSHORT/SHORTCTL_NOLONG) */
     int shortctl;
+    int useSbr;
 	
 	/*
 		Channel Remapping
