@@ -35,6 +35,8 @@
 void quantize_mxu2(const faac_real * __restrict xr, int * __restrict xi, int n, faac_real sfacfix)
 {
     int cnt = 0;
+
+#ifdef __mips__
     const mxu2_v4i32 zero_i = {0, 0, 0, 0};
     const float sfac_f = (float)sfacfix;
     const mxu2_v4f32 sfac = {sfac_f, sfac_f, sfac_f, sfac_f};
@@ -44,7 +46,6 @@ void quantize_mxu2(const faac_real * __restrict xr, int * __restrict xi, int n, 
 
     for (; cnt <= n - 4; cnt += 4)
     {
-        /* Buffer should be 16-byte aligned due to aligned AllocMemory */
         mxu2_v4i32 x_orig_i = mxu2_load(&xr[cnt]);
 
         mxu2_v4i32 sign_mask = mxu2_clts_w(x_orig_i, zero_i);
@@ -58,12 +59,11 @@ void quantize_mxu2(const faac_real * __restrict xr, int * __restrict xi, int n, 
         x = mxu2_fadd_w(x, magic);
 
         mxu2_v4i32 xi_vec = mxu2_vtruncsws((mxu2_v4i32)x);
-
-        /* Bitwise Sign Fix: (val ^ mask) - mask */
         xi_vec = (mxu2_v4i32)mxu2_sub_w((mxu2_v4i32)mxu2_xorv((mxu2_v16i8)xi_vec, (mxu2_v16i8)sign_mask), sign_mask);
 
         mxu2_store(&xi[cnt], xi_vec);
     }
+#endif
 
     for (; cnt < n; cnt++)
     {
@@ -76,57 +76,24 @@ void quantize_mxu2(const faac_real * __restrict xr, int * __restrict xi, int n, 
     }
 }
 
-/* Fast SIMD inverse square root for MXU3 using magic constant and one Newton-Raphson iteration */
-static inline mxu3_v16i32 mxu3_rsqrt_w(mxu3_v16i32 x)
-{
-    const uint32_t mc = 0x5f3759df;
-    const uint32_t th = 0x3fc00000; /* 1.5f */
-    const uint32_t ha = 0x3f000000; /* 0.5f */
-
-    const mxu3_v16i32 magic_const = {mc,mc,mc,mc,mc,mc,mc,mc,mc,mc,mc,mc,mc,mc,mc,mc};
-    const mxu3_v16i32 threehalfs = {th,th,th,th,th,th,th,th,th,th,th,th,th,th,th,th};
-    const mxu3_v16i32 half = {ha,ha,ha,ha,ha,ha,ha,ha,ha,ha,ha,ha,ha,ha,ha,ha};
-
-    mxu3_v16i32 i = mxu3_srliw(x, 1);
-    i = mxu3_subw(magic_const, i);
-
-    /* Newton-Raphson: y = y * (1.5 - (x2 * y * y)) */
-    mxu3_v16i32 x2 = mxu3_fmulw(x, half);
-    mxu3_v16i32 y2 = mxu3_fmulw(i, i);
-    mxu3_v16i32 tmp = mxu3_fmulw(x2, y2);
-    tmp = mxu3_fsubw(threehalfs, tmp);
-    i = mxu3_fmulw(i, tmp);
-
-    return i;
-}
-
 void quantize_mxu3(const faac_real * __restrict xr, int * __restrict xi, int n, faac_real sfacfix)
 {
     int cnt = 0;
+
+#ifdef __mips__
     const mxu3_v16i32 zero = {0};
-
     const float sfac_f = (float)sfacfix;
-    uint32_t sfac_u;
-    memcpy(&sfac_u, &sfac_f, 4);
+    uint32_t sfac_u; memcpy(&sfac_u, &sfac_f, 4);
     const mxu3_v16i32 sfac = {sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u};
-
     const float magic_f = (float)MAGIC_NUMBER;
-    uint32_t magic_u;
-    memcpy(&magic_u, &magic_f, 4);
+    uint32_t magic_u; memcpy(&magic_u, &magic_f, 4);
     const mxu3_v16i32 magic = {magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u};
-
     const uint32_t am = 0x7FFFFFFF;
     const mxu3_v16i32 abs_mask = {am,am,am,am,am,am,am,am,am,am,am,am,am,am,am,am};
 
     for (; cnt <= n - 16; cnt += 16)
     {
-        /* Alignment Note:
-         * MXU3 requires 64-byte alignment for MXU3_LOAD/STORE.
-         * Buffer xr and xi are now 64-byte aligned via faac_aligned_alloc.
-         * However, sfb offsets are not always multiple of 16 (for 64-byte).
-         * We check runtime alignment and use direct SIMD if possible.
-         */
-        if (((uintptr_t)&xr[cnt] & 63) == 0 && ((uintptr_t)&xi[cnt] & 63) == 0) {
+        if (((uintptr_t)&xr[cnt] & 15) == 0 && ((uintptr_t)&xi[cnt] & 15) == 0) {
             mxu3_v16i32 x_orig = MXU3_LOAD(&xr[cnt]);
 
             mxu3_v16i32 sign_mask = mxu3_cltsw(x_orig, zero);
@@ -134,24 +101,19 @@ void quantize_mxu3(const faac_real * __restrict xr, int * __restrict xi, int n, 
 
             x = mxu3_fmulw(x, sfac);
 
-            /* x^0.75 approx: sqrt(x * sqrt(x)) */
-            /* sqrt(x) = x * rsqrt(x) */
-            mxu3_v16i32 r1 = mxu3_rsqrt_w(x);
-            mxu3_v16i32 s1 = mxu3_fmulw(x, r1); /* s1 = sqrt(x) */
-            mxu3_v16i32 x_s1 = mxu3_fmulw(x, s1); /* x * sqrt(x) */
-            mxu3_v16i32 r2 = mxu3_rsqrt_w(x_s1);
-            x = mxu3_fmulw(x_s1, r2); /* x = sqrt(x * sqrt(x)) */
+            float *xf = (float *)&x;
+            for(int i=0; i<16; i++) {
+                xf[i] = sqrtf(xf[i] * sqrtf(xf[i]));
+            }
 
             x = mxu3_faddw(x, magic);
             mxu3_v16i32 xi_vec = mxu3_ftsiw(x);
 
-            /* Bitwise Sign Fix: (val ^ mask) - mask */
             xi_vec = mxu3_subw(mxu3_xorv(xi_vec, sign_mask), sign_mask);
 
             MXU3_STORE(&xi[cnt], xi_vec);
         } else {
-            /* Fallback to safe aligned stack buffers if alignment is lost */
-            faac_real temp_xr[16] ALIGN_BASE(64);
+            faac_real temp_xr[16] ALIGN_BASE(16);
             memcpy(temp_xr, &xr[cnt], 64);
             mxu3_v16i32 x_orig = MXU3_LOAD(temp_xr);
 
@@ -160,22 +122,22 @@ void quantize_mxu3(const faac_real * __restrict xr, int * __restrict xi, int n, 
 
             x = mxu3_fmulw(x, sfac);
 
-            mxu3_v16i32 r1 = mxu3_rsqrt_w(x);
-            mxu3_v16i32 s1 = mxu3_fmulw(x, r1);
-            mxu3_v16i32 x_s1 = mxu3_fmulw(x, s1);
-            mxu3_v16i32 r2 = mxu3_rsqrt_w(x_s1);
-            x = mxu3_fmulw(x_s1, r2);
+            float *xf = (float *)&x;
+            for(int i=0; i<16; i++) {
+                xf[i] = sqrtf(xf[i] * sqrtf(xf[i]));
+            }
 
             x = mxu3_faddw(x, magic);
             mxu3_v16i32 xi_vec = mxu3_ftsiw(x);
 
             xi_vec = mxu3_subw(mxu3_xorv(xi_vec, sign_mask), sign_mask);
 
-            int temp_xi[16] ALIGN_BASE(64);
+            int temp_xi[16] ALIGN_BASE(16);
             MXU3_STORE(temp_xi, xi_vec);
             memcpy(&xi[cnt], temp_xi, 64);
         }
     }
+#endif
 
     for (; cnt < n; cnt++)
     {

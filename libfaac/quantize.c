@@ -25,6 +25,7 @@
 #include "quantize.h"
 #include "huff2.h"
 #include "cpu_compute.h"
+#include "util.h"
 
 #ifdef __GNUC__
 #define GCC_VERSION (__GNUC__ * 10000 \
@@ -199,7 +200,7 @@ static void qlevel(CoderInfo * __restrict coderInfo,
       int sfac;
       faac_real rmsx;
       faac_real etot;
-      int xitab[8 * MAXSHORTBAND];
+      ALIGN_BASE(16) int xitab[8 * MAXSHORTBAND];
       int *xi;
       int start, end;
       const faac_real *xr;
@@ -222,9 +223,6 @@ static void qlevel(CoderInfo * __restrict coderInfo,
           coderInfo->book[coderInfo->bandcnt++] = HCB_ZERO;
           continue;
       }
-
-      /* Align start/end to 64-byte for SIMD optimization if possible */
-      /* Since xr is aligned to 64-byte, xr + start is aligned if start is multiple of 16 (for float) */
 
       if (bandqual[sb] < pnsthr)
       {

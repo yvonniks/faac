@@ -29,11 +29,11 @@
 void *faac_aligned_alloc(size_t size)
 {
     void *ptr = NULL;
-    /* MXU3 needs 64-byte alignment */
+    /* Ingenic MXU needs 16-byte alignment */
 #if defined(_MSC_VER) || defined(__MINGW32__)
-    ptr = _aligned_malloc(size, 64);
+    ptr = _aligned_malloc(size, 16);
 #else
-    if (posix_memalign(&ptr, 64, size) != 0)
+    if (posix_memalign(&ptr, 16, size) != 0)
         return NULL;
 #endif
     return ptr;
@@ -79,4 +79,3 @@ unsigned int MinBitrate()
 {
     return 8000;
 }
-
