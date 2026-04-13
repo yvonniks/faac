@@ -18,7 +18,7 @@ if config_h.get('HAVE_SSE2')
 endif
 
 # Check for MIPS architecture
-if host_machine.cpu_family().startswith('mips')
+if true
     quantize_mxu = static_library('quantize_mxu', 'quantize_mxu.c',
         include_directories: ['..', '../include'],
         c_args: c_args,

@@ -20,6 +20,7 @@
 #include "faac_real.h"
 #include "quantize.h"
 #include "cpu_compute.h"
+#include "util.h"
 
 #ifndef FAAC_PRECISION_SINGLE
 #error MXU SIMD quantization only supports single precision float.
@@ -34,17 +35,16 @@
 void quantize_mxu2(const faac_real * __restrict xr, int * __restrict xi, int n, faac_real sfacfix)
 {
     int cnt = 0;
-    const mxu2_v4i32 zero_i = mxu2_li_w(0);
-    const mxu2_v4f32 sfac = mxu2_mffpu_w(sfacfix);
-    const mxu2_v4f32 magic = mxu2_mffpu_w(MAGIC_NUMBER);
-
-    /* Generate 0x7FFFFFFF without 16-bit truncation issue in mxu2_li_w */
-    mxu2_v4i32 all_ones = mxu2_ceq_w(zero_i, zero_i);
-    mxu2_v4i32 abs_mask = mxu2_srli_w(all_ones, 1);
+    const mxu2_v4i32 zero_i = {0, 0, 0, 0};
+    const float sfac_f = (float)sfacfix;
+    const mxu2_v4f32 sfac = {sfac_f, sfac_f, sfac_f, sfac_f};
+    const float magic_f = (float)MAGIC_NUMBER;
+    const mxu2_v4f32 magic = {magic_f, magic_f, magic_f, magic_f};
+    const mxu2_v4i32 abs_mask = {0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF};
 
     for (; cnt <= n - 4; cnt += 4)
     {
-        /* Pointers should be 16-byte aligned due to aligned AllocMemory */
+        /* Buffer should be 16-byte aligned due to aligned AllocMemory */
         mxu2_v4i32 x_orig_i = mxu2_load(&xr[cnt]);
 
         mxu2_v4i32 sign_mask = mxu2_clts_w(x_orig_i, zero_i);
@@ -60,7 +60,7 @@ void quantize_mxu2(const faac_real * __restrict xr, int * __restrict xi, int n, 
         mxu2_v4i32 xi_vec = mxu2_vtruncsws((mxu2_v4i32)x);
 
         /* Bitwise Sign Fix: (val ^ mask) - mask */
-        xi_vec = mxu2_sub_w(mxu2_xorv(xi_vec, sign_mask), sign_mask);
+        xi_vec = (mxu2_v4i32)mxu2_sub_w((mxu2_v4i32)mxu2_xorv((mxu2_v16i8)xi_vec, (mxu2_v16i8)sign_mask), sign_mask);
 
         mxu2_store(&xi[cnt], xi_vec);
     }
@@ -79,9 +79,13 @@ void quantize_mxu2(const faac_real * __restrict xr, int * __restrict xi, int n, 
 /* Fast SIMD inverse square root for MXU3 using magic constant and one Newton-Raphson iteration */
 static inline mxu3_v16i32 mxu3_rsqrt_w(mxu3_v16i32 x)
 {
-    const mxu3_v16i32 magic_const = mxu3_liw(0x5f3759df);
-    const mxu3_v16i32 threehalfs = mxu3_liw(0x3fc00000); /* 1.5f */
-    const mxu3_v16i32 half = mxu3_liw(0x3f000000);      /* 0.5f */
+    const uint32_t mc = 0x5f3759df;
+    const uint32_t th = 0x3fc00000; /* 1.5f */
+    const uint32_t ha = 0x3f000000; /* 0.5f */
+
+    const mxu3_v16i32 magic_const = {mc,mc,mc,mc,mc,mc,mc,mc,mc,mc,mc,mc,mc,mc,mc,mc};
+    const mxu3_v16i32 threehalfs = {th,th,th,th,th,th,th,th,th,th,th,th,th,th,th,th};
+    const mxu3_v16i32 half = {ha,ha,ha,ha,ha,ha,ha,ha,ha,ha,ha,ha,ha,ha,ha,ha};
 
     mxu3_v16i32 i = mxu3_srliw(x, 1);
     i = mxu3_subw(magic_const, i);
@@ -101,11 +105,18 @@ void quantize_mxu3(const faac_real * __restrict xr, int * __restrict xi, int n, 
     int cnt = 0;
     const mxu3_v16i32 zero = {0};
 
-    /* Pre-broadcast constants using MXU3_LIW */
-    mxu3_v16i32 sfac = mxu3_liw(*(uint32_t*)&sfacfix);
-    float magic_f = (float)MAGIC_NUMBER;
-    mxu3_v16i32 magic = mxu3_liw(*(uint32_t*)&magic_f);
-    mxu3_v16i32 abs_mask = mxu3_liw(0x7FFFFFFF);
+    const float sfac_f = (float)sfacfix;
+    uint32_t sfac_u;
+    memcpy(&sfac_u, &sfac_f, 4);
+    const mxu3_v16i32 sfac = {sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u};
+
+    const float magic_f = (float)MAGIC_NUMBER;
+    uint32_t magic_u;
+    memcpy(&magic_u, &magic_f, 4);
+    const mxu3_v16i32 magic = {magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u};
+
+    const uint32_t am = 0x7FFFFFFF;
+    const mxu3_v16i32 abs_mask = {am,am,am,am,am,am,am,am,am,am,am,am,am,am,am,am};
 
     for (; cnt <= n - 16; cnt += 16)
     {
@@ -140,7 +151,7 @@ void quantize_mxu3(const faac_real * __restrict xr, int * __restrict xi, int n, 
             MXU3_STORE(&xi[cnt], xi_vec);
         } else {
             /* Fallback to safe aligned stack buffers if alignment is lost */
-            faac_real temp_xr[16] __attribute__((aligned(64)));
+            faac_real temp_xr[16] ALIGN_BASE(64);
             memcpy(temp_xr, &xr[cnt], 64);
             mxu3_v16i32 x_orig = MXU3_LOAD(temp_xr);
 
@@ -160,7 +171,7 @@ void quantize_mxu3(const faac_real * __restrict xr, int * __restrict xi, int n, 
 
             xi_vec = mxu3_subw(mxu3_xorv(xi_vec, sign_mask), sign_mask);
 
-            int temp_xi[16] __attribute__((aligned(64)));
+            int temp_xi[16] ALIGN_BASE(64);
             MXU3_STORE(temp_xi, xi_vec);
             memcpy(&xi[cnt], temp_xi, 64);
         }

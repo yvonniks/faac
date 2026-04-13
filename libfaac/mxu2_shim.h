@@ -1397,44 +1397,44 @@ static __inline__ mxu2_v16i8 mxu2_shufv(mxu2_v16i8 a, mxu2_v16i8 b, mxu2_v16i8 c
 /* --- Branch predicates (bnez/beqz) --- */
 
 static __inline__ int mxu2_bnez16b(mxu2_v16i8 v) {
-    unsigned int *p = (unsigned int *)&v;
-    return (p[0] | p[1] | p[2] | p[3]) != 0;
+    union { mxu2_v16i8 v; unsigned int p[4]; } u = { v };
+    return (u.p[0] | u.p[1] | u.p[2] | u.p[3]) != 0;
 }
 static __inline__ int mxu2_bnez8h(mxu2_v16i8 v) {
-    unsigned int *p = (unsigned int *)&v;
-    return (p[0] | p[1] | p[2] | p[3]) != 0;
+    union { mxu2_v16i8 v; unsigned int p[4]; } u = { v };
+    return (u.p[0] | u.p[1] | u.p[2] | u.p[3]) != 0;
 }
 static __inline__ int mxu2_bnez4w(mxu2_v16i8 v) {
-    unsigned int *p = (unsigned int *)&v;
-    return (p[0] | p[1] | p[2] | p[3]) != 0;
+    union { mxu2_v16i8 v; unsigned int p[4]; } u = { v };
+    return (u.p[0] | u.p[1] | u.p[2] | u.p[3]) != 0;
 }
 static __inline__ int mxu2_bnez2d(mxu2_v16i8 v) {
-    unsigned int *p = (unsigned int *)&v;
-    return (p[0] | p[1] | p[2] | p[3]) != 0;
+    union { mxu2_v16i8 v; unsigned int p[4]; } u = { v };
+    return (u.p[0] | u.p[1] | u.p[2] | u.p[3]) != 0;
 }
 static __inline__ int mxu2_bnez1q(mxu2_v16i8 v) {
-    unsigned int *p = (unsigned int *)&v;
-    return (p[0] | p[1] | p[2] | p[3]) != 0;
+    union { mxu2_v16i8 v; unsigned int p[4]; } u = { v };
+    return (u.p[0] | u.p[1] | u.p[2] | u.p[3]) != 0;
 }
 static __inline__ int mxu2_beqz16b(mxu2_v16i8 v) {
-    unsigned int *p = (unsigned int *)&v;
-    return (p[0] | p[1] | p[2] | p[3]) == 0;
+    union { mxu2_v16i8 v; unsigned int p[4]; } u = { v };
+    return (u.p[0] | u.p[1] | u.p[2] | u.p[3]) == 0;
 }
 static __inline__ int mxu2_beqz8h(mxu2_v16i8 v) {
-    unsigned int *p = (unsigned int *)&v;
-    return (p[0] | p[1] | p[2] | p[3]) == 0;
+    union { mxu2_v16i8 v; unsigned int p[4]; } u = { v };
+    return (u.p[0] | u.p[1] | u.p[2] | u.p[3]) == 0;
 }
 static __inline__ int mxu2_beqz4w(mxu2_v16i8 v) {
-    unsigned int *p = (unsigned int *)&v;
-    return (p[0] | p[1] | p[2] | p[3]) == 0;
+    union { mxu2_v16i8 v; unsigned int p[4]; } u = { v };
+    return (u.p[0] | u.p[1] | u.p[2] | u.p[3]) == 0;
 }
 static __inline__ int mxu2_beqz2d(mxu2_v16i8 v) {
-    unsigned int *p = (unsigned int *)&v;
-    return (p[0] | p[1] | p[2] | p[3]) == 0;
+    union { mxu2_v16i8 v; unsigned int p[4]; } u = { v };
+    return (u.p[0] | u.p[1] | u.p[2] | u.p[3]) == 0;
 }
 static __inline__ int mxu2_beqz1q(mxu2_v16i8 v) {
-    unsigned int *p = (unsigned int *)&v;
-    return (p[0] | p[1] | p[2] | p[3]) == 0;
+    union { mxu2_v16i8 v; unsigned int p[4]; } u = { v };
+    return (u.p[0] | u.p[1] | u.p[2] | u.p[3]) == 0;
 }
 
 /* --- Control register access (cfcmxu/ctcmxu) --- */
@@ -1517,37 +1517,47 @@ static __inline__ void mxu2_su1q(mxu2_v16i8 v, void *ptr, int off) {
 /* --- Scalar extract VPR -> GPR (mtcpus/mtcpuu) --- */
 
 static __inline__ int mxu2_mtcpus_b(mxu2_v4i32 v, unsigned char lane) {
-    return (int)((signed char *)&v)[lane];
+    union { mxu2_v4i32 v; signed char p[16]; } u = { v };
+    return (int)u.p[lane];
 }
 static __inline__ int mxu2_mtcpus_h(mxu2_v4i32 v, unsigned char lane) {
-    return (int)((short *)&v)[lane];
+    union { mxu2_v4i32 v; short p[8]; } u = { v };
+    return (int)u.p[lane];
 }
 static __inline__ int mxu2_mtcpus_w(mxu2_v4i32 v, unsigned char lane) {
-    return (int)((int *)&v)[lane];
+    union { mxu2_v4i32 v; int p[4]; } u = { v };
+    return u.p[lane];
 }
 static __inline__ int mxu2_mtcpus_d(mxu2_v4i32 v, unsigned char lane) {
-    return (int)((int *)&v)[lane];
+    union { mxu2_v4i32 v; int p[4]; } u = { v };
+    return u.p[lane];
 }
 static __inline__ unsigned int mxu2_mtcpuu_b(mxu2_v4i32 v, unsigned char lane) {
-    return (unsigned int)((unsigned char *)&v)[lane];
+    union { mxu2_v4i32 v; unsigned char p[16]; } u = { v };
+    return (unsigned int)u.p[lane];
 }
 static __inline__ unsigned int mxu2_mtcpuu_h(mxu2_v4i32 v, unsigned char lane) {
-    return (unsigned int)((unsigned short *)&v)[lane];
+    union { mxu2_v4i32 v; unsigned short p[8]; } u = { v };
+    return (unsigned int)u.p[lane];
 }
 static __inline__ unsigned int mxu2_mtcpuu_w(mxu2_v4i32 v, unsigned char lane) {
-    return (unsigned int)((unsigned int *)&v)[lane];
+    union { mxu2_v4i32 v; unsigned int p[4]; } u = { v };
+    return u.p[lane];
 }
 static __inline__ unsigned int mxu2_mtcpuu_d(mxu2_v4i32 v, unsigned char lane) {
-    return (unsigned int)((unsigned int *)&v)[lane];
+    union { mxu2_v4i32 v; unsigned int p[4]; } u = { v };
+    return u.p[lane];
 }
 
 /* --- Scalar extract VPR -> FPU (mtfpu) --- */
 
 static __inline__ float mxu2_mtfpu_w(mxu2_v4f32 v, unsigned char lane) {
-    return ((float *)&v)[lane];
+    union { mxu2_v4f32 v; float p[4]; } u = { v };
+    return u.p[lane];
 }
 static __inline__ double mxu2_mtfpu_d(mxu2_v4i32 v, unsigned char lane) {
-    return ((double *)&v)[lane];
+    union { mxu2_v4i32 v; double p[2]; } u = { v };
+    return u.p[lane];
 }
 
 /* --- Scalar insert GPR -> VPR broadcast (mfcpu) --- */
@@ -1613,21 +1623,25 @@ static __inline__ mxu2_v4i32 mxu2_mffpu_d(double val) {
 /* --- Replicate from lane (runtime index, repx) --- */
 
 static __inline__ mxu2_v16i8 mxu2_repx_b(mxu2_v16i8 v, int lane) {
-    signed char val = ((signed char *)&v)[lane];
+    union { mxu2_v16i8 v; signed char p[16]; } u = { v };
+    signed char val = u.p[lane];
     return (mxu2_v16i8){val,val,val,val,val,val,val,val,val,val,val,val,val,val,val,val};
 }
 static __inline__ mxu2_v8i16 mxu2_repx_h(mxu2_v8i16 v, int lane) {
-    short val = ((short *)&v)[lane];
+    union { mxu2_v8i16 v; short p[8]; } u = { v };
+    short val = u.p[lane];
     return (mxu2_v8i16){val,val,val,val,val,val,val,val};
 }
 static __inline__ mxu2_v4i32 mxu2_repx_w(mxu2_v4i32 v, int lane) {
-    int val = ((int *)&v)[lane];
+    union { mxu2_v4i32 v; int p[4]; } u = { v };
+    int val = u.p[lane];
     return (mxu2_v4i32){val,val,val,val};
 }
 static __inline__ mxu2_v4i32 mxu2_repx_d(mxu2_v4i32 v, int lane) {
-    long long val = ((long long *)&v)[lane];
-    long long arr[2] = {val, val};
-    return *(mxu2_v4i32 *)arr;
+    union { mxu2_v4i32 v; long long p[2]; } u = { v };
+    long long val = u.p[lane];
+    union { long long p[2]; mxu2_v4i32 v; } r = { {val, val} };
+    return r.v;
 }
 
 #else /* __mips_mxu2 -- delegate to native Ingenic intrinsics */

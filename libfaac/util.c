@@ -20,6 +20,9 @@
 
 #include <math.h>
 #include <stdlib.h>
+#if defined(_MSC_VER) || defined(__MINGW32__)
+#include <malloc.h>
+#endif
 
 #include "util.h"
 
