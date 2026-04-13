@@ -33,6 +33,7 @@ Copyright (c) 1997.
 #include "huff2.h"
 #include "bitstream.h"
 #include "util.h"
+#include "sbr.h"
 
 static int CountBitstream(faacEncStruct* hEncoder,
                           CoderInfo *coderInfo,
@@ -202,6 +203,11 @@ int WriteBitstream(faacEncStruct* hEncoder,
     bitsLeftAfterFill = WriteAACFillBits(bitStream, numFillBits, 1);
     bits += (numFillBits - bitsLeftAfterFill);
 
+    /* Write SBR extension payload for HE-AAC */
+    if (hEncoder->config.aacObjectType == HE_AAC) {
+        bits += SBRWriteBitstream(hEncoder->sbrInfo, bitStream, 1);
+    }
+
     /* Write ID_END terminator */
     bits += LEN_SE_ID;
     PutBit(bitStream, ID_END, LEN_SE_ID);
@@ -288,6 +294,11 @@ static int CountBitstream(faacEncStruct* hEncoder,
     numFillBits += 6;
     bitsLeftAfterFill = WriteAACFillBits(bitStream, numFillBits, 0);
     bits += (numFillBits - bitsLeftAfterFill);
+
+    /* Write SBR extension payload for HE-AAC */
+    if (hEncoder->config.aacObjectType == HE_AAC) {
+        bits += SBRWriteBitstream(hEncoder->sbrInfo, bitStream, 0);
+    }
 
     /* Write ID_END terminator */
     bits += LEN_SE_ID;

@@ -35,6 +35,10 @@ extern "C" {
 #define NSFB_LONG  51
 #define NSFB_SHORT 15
 #define MAX_SHORT_WINDOWS 8
+
+/* SBR constants */
+#define SBR_EXT_TYPE_SBR 0xd
+#define SBR_EXT_TYPE_SBR_CRC 0xe
 #define MAX_SCFAC_BANDS ((NSFB_SHORT+1)*MAX_SHORT_WINDOWS)
 
 enum WINDOW_TYPE {

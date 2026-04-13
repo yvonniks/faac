@@ -764,6 +764,10 @@ int main(int argc, char *argv[])
             case 4:
                 mpegVersion = MPEG4;
                 break;
+            case 5:
+                mpegVersion = MPEG4;
+                objectType = HE_AAC;
+                break;
             default:
                 dieMessage = "Unrecognised MPEG version!\n";
             }
@@ -1023,6 +1027,9 @@ int main(int argc, char *argv[])
         break;
     case LTP:
         fprintf(stderr, "LTP");
+        break;
+    case HE_AAC:
+        fprintf(stderr, "HE-AAC");
         break;
     }
     fprintf(stderr, " (MPEG-%d)", (mpegVersion == MPEG4) ? 4 : 2);
