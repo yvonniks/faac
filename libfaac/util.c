@@ -19,8 +19,31 @@
  */
 
 #include <math.h>
+#include <stdlib.h>
 
 #include "util.h"
+
+void *faac_aligned_alloc(size_t size)
+{
+    void *ptr = NULL;
+    /* MXU3 needs 64-byte alignment */
+#if defined(_MSC_VER) || defined(__MINGW32__)
+    ptr = _aligned_malloc(size, 64);
+#else
+    if (posix_memalign(&ptr, 64, size) != 0)
+        return NULL;
+#endif
+    return ptr;
+}
+
+void faac_aligned_free(void *ptr)
+{
+#if defined(_MSC_VER) || defined(__MINGW32__)
+    _aligned_free(ptr);
+#else
+    free(ptr);
+#endif
+}
 #include "coder.h"  // FRAME_LEN
 
 /* Returns the sample rate index */

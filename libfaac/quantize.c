@@ -61,10 +61,17 @@ static faac_real max_quant_limit;
 
 void QuantizeInit(void)
 {
-#if defined(HAVE_SSE2)
     CPUCaps caps = get_cpu_caps();
+#if defined(HAVE_SSE2)
     if (caps & CPU_CAP_SSE2)
         qfunc = quantize_sse2;
+    else
+#endif
+#if defined(MIPS_ARCH) && defined(FAAC_PRECISION_SINGLE)
+    if (caps & CPU_CAP_MXU3)
+        qfunc = quantize_mxu3;
+    else if (caps & CPU_CAP_MXU2)
+        qfunc = quantize_mxu2;
     else
 #endif
         qfunc = quantize_scalar;
@@ -215,6 +222,9 @@ static void qlevel(CoderInfo * __restrict coderInfo,
           coderInfo->book[coderInfo->bandcnt++] = HCB_ZERO;
           continue;
       }
+
+      /* Align start/end to 64-byte for SIMD optimization if possible */
+      /* Since xr is aligned to 64-byte, xr + start is aligned if start is multiple of 16 (for float) */
 
       if (bandqual[sb] < pnsthr)
       {

@@ -29,7 +29,16 @@ extern "C" {
 #endif /* __cplusplus */
 
 #include <stdlib.h>
+#include <stddef.h>
 #include <memory.h>
+
+#if defined(_MSC_VER)
+#define ALIGN_BASE(x) __declspec(align(x))
+#elif defined(__GNUC__) || defined(__clang__)
+#define ALIGN_BASE(x) __attribute__((aligned(x)))
+#else
+#define ALIGN_BASE(x)
+#endif
 
 #ifndef max
 #define max(a, b) (((a) > (b)) ? (a) : (b))
@@ -43,8 +52,11 @@ extern "C" {
 #endif
 
 /* Memory functions */
-#define AllocMemory(size) malloc(size)
-#define FreeMemory(block) free(block)
+void *faac_aligned_alloc(size_t size);
+void faac_aligned_free(void *ptr);
+
+#define AllocMemory(size) faac_aligned_alloc(size)
+#define FreeMemory(block) faac_aligned_free(block)
 #define SetMemory(block, value, size) memset(block, value, size)
 
 int GetSRIndex(unsigned int sampleRate);

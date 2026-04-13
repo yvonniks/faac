@@ -24,9 +24,15 @@
 # define SSE2_ARCH
 #endif
 
+#if defined(__mips__) || defined(__mips) || defined(mips)
+# define MIPS_ARCH
+#endif
+
 typedef enum {
     CPU_CAP_NONE = 0,
-    CPU_CAP_SSE2 = (1 << 0)
+    CPU_CAP_SSE2 = (1 << 0),
+    CPU_CAP_MXU2 = (1 << 1),
+    CPU_CAP_MXU3 = (1 << 2)
 } CPUCaps;
 
 CPUCaps get_cpu_caps(void);
