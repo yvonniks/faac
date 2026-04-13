@@ -179,7 +179,8 @@ static void qlevel(CoderInfo * __restrict coderInfo,
                    const faac_real * __restrict bandenrg,
                    const faac_real * __restrict bandmaxe,
                    int gnum,
-                   int pnslevel
+                   int pnslevel,
+                   int pass
                   )
 {
     int sb;
@@ -198,70 +199,103 @@ static void qlevel(CoderInfo * __restrict coderInfo,
       const faac_real *xr;
       int win;
 
-      if (coderInfo->book[coderInfo->bandcnt] != HCB_NONE)
+      if (pass == 1)
       {
-          coderInfo->bandcnt++;
-          continue;
+          if (coderInfo->book[coderInfo->bandcnt] != HCB_NONE)
+          {
+              coderInfo->bandcnt++;
+              continue;
+          }
+
+          start = coderInfo->sfb_offset[sb];
+          end = coderInfo->sfb_offset[sb+1];
+
+          etot = bandenrg[sb] / (faac_real)gsize;
+          rmsx = FAAC_SQRT(etot / (end - start));
+
+          if ((rmsx < NOISEFLOOR) || (!bandqual[sb]))
+          {
+              coderInfo->book[coderInfo->bandcnt++] = HCB_ZERO;
+              continue;
+          }
+
+          if (bandqual[sb] < pnsthr)
+          {
+              coderInfo->book[coderInfo->bandcnt] = HCB_PNS;
+              coderInfo->sf[coderInfo->bandcnt] +=
+                  FAAC_LRINT(FAAC_LOG10(etot) * (0.5 * sfstep));
+              coderInfo->bandcnt++;
+              continue;
+          }
+
+          sfac = FAAC_LRINT(FAAC_LOG10(bandqual[sb] / rmsx) * sfstep);
+
+          if ((SF_OFFSET - sfac) < SF_MIN)
+              sfacfix = 0.0;
+          else
+          {
+              sfacfix = FAAC_POW(10, sfac / sfstep);
+
+              /* Bitstream saturation check: if gain * peak exceeds the Huffman limit,
+               * clamp gain and re-sync the integer scalefactor to prevent overflow. */
+              if (sfacfix * bandmaxe[sb] > max_quant_limit)
+              {
+                  sfacfix = max_quant_limit / bandmaxe[sb];
+                  sfac = (int)FAAC_FLOOR(FAAC_LOG10(sfacfix) * sfstep);
+              }
+          }
+
+          coderInfo->book[coderInfo->bandcnt] = HCB_ESC; // placeholder
+          coderInfo->sf[coderInfo->bandcnt++] += SF_OFFSET - sfac;
       }
-
-      start = coderInfo->sfb_offset[sb];
-      end = coderInfo->sfb_offset[sb+1];
-
-      etot = bandenrg[sb] / (faac_real)gsize;
-      rmsx = FAAC_SQRT(etot / (end - start));
-
-      if ((rmsx < NOISEFLOOR) || (!bandqual[sb]))
-      {
-          coderInfo->book[coderInfo->bandcnt++] = HCB_ZERO;
-          continue;
-      }
-
-      if (bandqual[sb] < pnsthr)
-      {
-          coderInfo->book[coderInfo->bandcnt] = HCB_PNS;
-          coderInfo->sf[coderInfo->bandcnt] +=
-              FAAC_LRINT(FAAC_LOG10(etot) * (0.5 * sfstep));
-          coderInfo->bandcnt++;
-          continue;
-      }
-
-      sfac = FAAC_LRINT(FAAC_LOG10(bandqual[sb] / rmsx) * sfstep);
-
-      if ((SF_OFFSET - sfac) < SF_MIN)
-          sfacfix = 0.0;
       else
       {
+          int book = coderInfo->book[coderInfo->bandcnt];
+
+          if (book == HCB_PNS || book == HCB_ZERO)
+          {
+              coderInfo->bandcnt++;
+              continue;
+          }
+
+          if (book == HCB_INTENSITY || book == HCB_INTENSITY2)
+          {
+              // Handled by right channel during bitstream writing, but we need to track bandcnt
+              coderInfo->bandcnt++;
+              continue;
+          }
+
+          start = coderInfo->sfb_offset[sb];
+          end = coderInfo->sfb_offset[sb+1];
+
+          sfac = SF_OFFSET - coderInfo->sf[coderInfo->bandcnt];
           sfacfix = FAAC_POW(10, sfac / sfstep);
 
-          /* Bitstream saturation check: if gain * peak exceeds the Huffman limit,
-           * clamp gain and re-sync the integer scalefactor to prevent overflow. */
           if (sfacfix * bandmaxe[sb] > max_quant_limit)
           {
               sfacfix = max_quant_limit / bandmaxe[sb];
               sfac = (int)FAAC_FLOOR(FAAC_LOG10(sfacfix) * sfstep);
-              /* Re-derive gain from the floored scalefactor to ensure bit-exact
-               * sync with the decoder's inverse quantizer. */
               sfacfix = FAAC_POW(10, sfac / sfstep);
           }
-      }
 
-      end -= start;
-      xi = xitab;
-      if (sfacfix <= 0.0)
-      {
-          memset(xi, 0, gsize * end * sizeof(int));
-      }
-      else
-      {
-          for (win = 0; win < gsize; win++)
+          end -= start;
+          xi = xitab;
+          if (sfacfix <= 0.0)
           {
-              xr = xr0 + win * BLOCK_LEN_SHORT + start;
-              qfunc(xr, xi, end, sfacfix);
-              xi += end;
+              memset(xi, 0, gsize * end * sizeof(int));
           }
+          else
+          {
+              for (win = 0; win < gsize; win++)
+              {
+                  xr = xr0 + win * BLOCK_LEN_SHORT + start;
+                  qfunc(xr, xi, end, sfacfix);
+                  xi += end;
+              }
+          }
+          huffbook(coderInfo, xitab, gsize * end);
+          coderInfo->bandcnt++;
       }
-      huffbook(coderInfo, xitab, gsize * end);
-      coderInfo->sf[coderInfo->bandcnt++] += SF_OFFSET - sfac;
     }
 }
 
@@ -287,7 +321,7 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
         {
             bmask(coder, gxr, bandlvl, bandenrg, bandmaxe, cnt,
                   (faac_real)aacquantCfg->quality/DEFQUAL);
-            qlevel(coder, gxr, bandlvl, bandenrg, bandmaxe, cnt, aacquantCfg->pnslevel);
+            qlevel(coder, gxr, bandlvl, bandenrg, bandmaxe, cnt, aacquantCfg->pnslevel, 1);
             gxr += coder->groups.len[cnt] * BLOCK_LEN_SHORT;
         }
 
@@ -332,6 +366,18 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
                 coder->sf[cnt] = lastsf;
             }
         }
+
+        coder->bandcnt = 0;
+        coder->datacnt = 0;
+        gxr = xr;
+        for (cnt = 0; cnt < coder->groups.n; cnt++)
+        {
+            bmask(coder, gxr, bandlvl, bandenrg, bandmaxe, cnt,
+                  (faac_real)aacquantCfg->quality/DEFQUAL);
+            qlevel(coder, gxr, bandlvl, bandenrg, bandmaxe, cnt, aacquantCfg->pnslevel, 2);
+            gxr += coder->groups.len[cnt] * BLOCK_LEN_SHORT;
+        }
+
         return 1;
     }
     return 0;
