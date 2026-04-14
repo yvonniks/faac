@@ -1,23 +1,7 @@
 /*
  * FAAC - Freeware Advanced Audio Coder
  * Copyright (C) 2001 Menno Bakker
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
-
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- *
  */
-
 #include "config.h"
 #include <math.h>
 #include <stdlib.h>
@@ -25,7 +9,7 @@
 #include <malloc.h>
 #endif
 #include "util.h"
-#include "coder.h"  // FRAME_LEN
+#include "coder.h"
 
 #ifndef FAAC_SIMD_ALIGNMENT
 #define FAAC_SIMD_ALIGNMENT 16
@@ -52,7 +36,6 @@ void faac_aligned_free(void *ptr)
 #endif
 }
 
-/* Returns the sample rate index */
 int GetSRIndex(unsigned int sampleRate)
 {
     if (92017 <= sampleRate) return 0;
@@ -66,18 +49,14 @@ int GetSRIndex(unsigned int sampleRate)
     if (13856 <= sampleRate) return 8;
     if (11502 <= sampleRate) return 9;
     if (9391 <= sampleRate) return 10;
-
     return 11;
 }
 
-/* Returns the maximum bitrate for that sampling frequency */
 unsigned int MaxBitrate(unsigned long sampleRate)
 {
-    /* max ADTS frame size 8k */
     return 0x2000 * 8 * (faac_real)sampleRate/(faac_real)FRAME_LEN;
 }
 
-/* Returns the minimum bitrate per channel for that sampling frequency */
 unsigned int MinBitrate()
 {
     return 8000;
