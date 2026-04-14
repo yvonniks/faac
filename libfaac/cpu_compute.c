@@ -31,6 +31,11 @@
 # endif
 #endif
 
+#if defined(MIPS_ARCH)
+#include "mxu2_shim.h"
+#include "mxu3_shim.h"
+#endif
+
 CPUCaps get_cpu_caps(void)
 {
     CPUCaps caps = CPU_CAP_NONE;
@@ -60,6 +65,13 @@ CPUCaps get_cpu_caps(void)
         if (edx & (1 << 26)) // SSE2
             caps |= CPU_CAP_SSE2;
     }
+#endif
+
+#if defined(MIPS_ARCH)
+    if (mxu3_available())
+        caps |= CPU_CAP_MXU3;
+    else if (mxu2_available())
+        caps |= CPU_CAP_MXU2;
 #endif
 
     return caps;

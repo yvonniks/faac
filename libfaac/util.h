@@ -16,20 +16,36 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
- * $Id: util.h,v 1.8 2003/12/20 04:32:48 stux Exp $
+ * : util.h,v 1.8 2003/12/20 04:32:48 stux Exp $
  */
 
 #ifndef UTIL_H
 #define UTIL_H
 
 #include "faac_real.h"
+#include "config.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
 
 #include <stdlib.h>
-#include <memory.h>
+#include <stddef.h>
+#include <string.h>
+
+#ifndef FAAC_SIMD_ALIGNMENT
+#define FAAC_SIMD_ALIGNMENT 16
+#endif
+
+#if defined(_MSC_VER)
+#define ALIGN_BASE(x) __declspec(align(x))
+#elif defined(__GNUC__) || defined(__clang__)
+#define ALIGN_BASE(x) __attribute__((aligned(x)))
+#else
+#define ALIGN_BASE(x)
+#endif
+
+#define ALIGN_SIMD ALIGN_BASE(FAAC_SIMD_ALIGNMENT)
 
 #ifndef max
 #define max(a, b) (((a) > (b)) ? (a) : (b))
@@ -43,8 +59,11 @@ extern "C" {
 #endif
 
 /* Memory functions */
-#define AllocMemory(size) malloc(size)
-#define FreeMemory(block) free(block)
+void *faac_aligned_alloc(size_t size);
+void faac_aligned_free(void *ptr);
+
+#define AllocMemory(size) faac_aligned_alloc(size)
+#define FreeMemory(block) faac_aligned_free(block)
 #define SetMemory(block, value, size) memset(block, value, size)
 
 int GetSRIndex(unsigned int sampleRate);
