@@ -323,7 +323,7 @@ void AACstereo(CoderInfo *coder,
         for (group = 0; group < cp->groups.n; group++)
         {
             int band;
-            for (band = 0; band < cp->sfbn_native; band++)
+            for (band = 0; band < cp->sfbn; band++)
             {
                 cp->book[bookcnt] = HCB_NONE;
                 cp->sf[bookcnt] = 0;

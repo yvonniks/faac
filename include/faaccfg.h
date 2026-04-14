@@ -114,7 +114,6 @@ typedef struct faacEncConfiguration
 
     /* block type enforcing (SHORTCTL_NORMAL/SHORTCTL_NOSHORT/SHORTCTL_NOLONG) */
     int shortctl;
-    int useSbr;
 	
 	/*
 		Channel Remapping
@@ -128,6 +127,7 @@ typedef struct faacEncConfiguration
 	*/
     int channel_map[64];
     int pnslevel;
+    int useSbr;
 } faacEncConfiguration, *faacEncConfigurationPtr;
 
 #pragma pack(pop)

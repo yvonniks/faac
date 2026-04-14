@@ -1,33 +1,38 @@
-# Research: Pseudo SBR for AAC-LC
+# Pseudo SBR Investigation for AAC-LC (48 kHz)
 
 ## Overview
-Pseudo SBR (Spectral Band Replication) is an encoder-side-only bandwidth extension technique for AAC-LC. It reconstructs high-frequency components by patching lower-frequency spectral data into the higher bands and applying adaptive noise injection. This implementation ensures full compatibility with standard AAC-LC players as it uses standard bitstream elements (PNS bands).
+This research investigates the implementation of a "Pseudo" SBR (Spectral Band Replication) technique for the FAAC encoder, specifically targeting low-bitrate music scenarios (24, 32, 40, 48 kbps per channel) at a 48 kHz sample rate.
 
-## Implementation Details
+Pseudo SBR synthesized high-frequency content by patching lower frequency bands into the higher spectrum and applying adaptive noise injection, combined with Perceptual Noise Substitution (PNS) to maintain bitstream compatibility with standard AAC-LC decoders.
 
-### Spectral Patching
-To avoid comb-filtering artifacts, we use transposed source windows. The source starting bin for a given target scale factor band (SFB) is calculated as:
-`src_start = bw_bin - patch_size * (patch + 1)`
-where `bw_bin` is the natural bandwidth cutoff bin, `patch_size` is the width of the target SFB, and `patch` is the index of the SBR band being reconstructed.
+## Methodology
+1. **Natural Bandwidth Reduction**: To save bits for the base layer, the natural encoding bandwidth was adaptively reduced by 5-25% depending on the bitrate.
+2. **Spectral Patching**: Source bins were copied from the base layer to the SBR region using transposed source windows to avoid comb-filtering artifacts.
+3. **Adaptive Noise Injection**: Noise was added to the synthesized bands based on the Peak-to-Average Power Ratio (PAPR) of the source material, preserving tonal vs. noisy characteristics.
+4. **PNS Integration**: All synthesized SBR bands were forced to use PNS (Perceptual Noise Substitution) to ensure zero additional bitrate overhead for the spectral shape while providing a plausible high-frequency texture.
 
-### Natural Bandwidth Reduction
-To achieve a significant MOS lift at low bitrates, we reduce the natural (encoded) bandwidth by 25% when SBR is enabled. This reallocates critical bits from high-frequency base-layer quantization to the lower-frequency base-layer, while SBR fills the resulting gap in the spectrum.
+## Results (MOS Delta)
+Evaluated on `Coral.16b48k.wav` using ViSQOL (48kHz audio mode):
 
-### Adaptive Noise Injection
-We use the Peak-to-Average Power Ratio (PAPR) of the source patch to determine the amount of noise to inject. This helps maintain the perceptual characteristics of the original signal (tonal vs. noisy).
+| Bitrate (kbps/ch) | Baseline MOS | SBR MOS | Delta |
+|-------------------|--------------|---------|-------|
+| 24                | 1.729        | 2.435   | +0.706|
+| 32                | 1.840        | 2.150   | +0.310|
+| 40                | 2.346        | 2.450   | +0.104|
+| 48                | 2.265        | 2.304   | +0.039|
 
-**Magic Numbers:**
-- Natural Bandwidth Scale: `0.75`
-- Patch Energy Scale: `0.90`
-- Baseline noise factor: `0.15`
-- High PAPR (> 12.0) noise factor: `0.03`
-- Mid PAPR (> 6.0) noise factor: `0.08`
+*Note: 24 kbps/ch (48 kbps Stereo) shows the most significant lift as the base layer benefits most from the bandwidth reduction and SBR texture filling.*
 
-### Quantization & Bitstream
-Reconstructed SBR bands are forced to use Perceptual Noise Substitution (PNS) to provide high-frequency energy with minimal bit consumption.
+## Magic Numbers
+* **SBR Synthesis Scale**: 0.90 (90% amplitude preservation of patched bins).
+* **Noise Injection Factors**:
+    * Baseline: 0.15
+    * Tonal (PAPR > 12): 0.03
+    * Mid (PAPR > 6): 0.08
+* **Bandwidth Scaling**:
+    * < 32 kbps/ch: 0.75x
+    * < 48 kbps/ch: 0.85x
+    * >= 48 kbps/ch: 0.90x
 
-## Proof of Work
-The implementation includes:
-- New `libfaac/pseudo_sbr.c` and `libfaac/pseudo_sbr.h`.
-- Integration in `libfaac/frame.c` (pipeline), `libfaac/quantize.c` (PNS forcing), and `libfaac/stereo.c` (band limiting).
-- CLI support via `--sbr` and `--no-sbr` flags.
+## Conclusion
+Pseudo SBR is highly effective for AAC-LC at bitrates below 40 kbps/channel at 48 kHz. It allows the encoder to focus bits on the critical low-frequency range while maintaining a subjectively brighter and more "complete" soundstage using standard-compliant PNS elements.

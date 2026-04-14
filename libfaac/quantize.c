@@ -212,9 +212,10 @@ static void qlevel(CoderInfo * __restrict coderInfo,
 
       if (sb >= coderInfo->sfbn_native)
       {
+          int nsfb = end - start;
           coderInfo->book[coderInfo->bandcnt] = HCB_PNS;
           coderInfo->sf[coderInfo->bandcnt] =
-              FAAC_LRINT(FAAC_LOG10(etot + 1e-6) * (0.5 * sfstep));
+              100 + FAAC_LRINT(FAAC_LOG10(etot / nsfb + 1e-6) * (0.5 * sfstep));
           coderInfo->bandcnt++;
           continue;
       }
