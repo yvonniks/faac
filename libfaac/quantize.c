@@ -37,6 +37,8 @@ typedef void (*QuantizeFunc)(const faac_real * __restrict xr, int * __restrict x
 
 #if defined(HAVE_SSE2)
 extern void quantize_sse2(const faac_real * __restrict xr, int * __restrict xi, int n, faac_real sfacfix);
+extern void quantize_mxu2(const faac_real * __restrict xr, int * __restrict xi, int n, faac_real sfacfix);
+extern void quantize_mxu3(const faac_real * __restrict xr, int * __restrict xi, int n, faac_real sfacfix);
 #endif
 
 static void quantize_scalar(const faac_real * __restrict xr, int * __restrict xi, int n, faac_real sfacfix)
@@ -60,12 +62,20 @@ static QuantizeFunc qfunc = quantize_scalar;
 static faac_real sfstep;
 static faac_real max_quant_limit;
 
+#define NOISEFLOOR 0.4
 void QuantizeInit(void)
 {
-#if defined(HAVE_SSE2)
     CPUCaps caps = get_cpu_caps();
+#if defined(HAVE_SSE2)
     if (caps & CPU_CAP_SSE2)
         qfunc = quantize_sse2;
+    else
+#endif
+#ifdef __mips__
+    if (caps & CPU_CAP_MXU3)
+        qfunc = quantize_mxu3;
+    else if (caps & CPU_CAP_MXU2)
+        qfunc = quantize_mxu2;
     else
 #endif
         qfunc = quantize_scalar;
@@ -77,7 +87,6 @@ void QuantizeInit(void)
      * Pre-calculated to avoid redundant runtime power functions. */
     max_quant_limit = FAAC_POW((faac_real)MAX_HUFF_ESC_VAL + 1.0 - MAGIC_NUMBER, 4.0/3.0);
 }
-#define NOISEFLOOR 0.4
 
 // band sound masking
 static void bmask(CoderInfo * __restrict coderInfo, faac_real * __restrict xr0, faac_real * __restrict bandqual,
