@@ -27,7 +27,9 @@
 #include "cpu_compute.h"
 
 #ifdef __GNUC__
-#define GCC_VERSION (__GNUC__ * 10000                      + __GNUC_MINOR__ * 100                      + __GNUC_PATCHLEVEL__)
+#define GCC_VERSION (__GNUC__ * 10000 \
+                     + __GNUC_MINOR__ * 100 \
+                     + __GNUC_PATCHLEVEL__)
 #endif
 
 typedef void (*QuantizeFunc)(const faac_real * __restrict xr, int * __restrict xi, int n, faac_real sfacfix);
@@ -369,7 +371,7 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
             }
         }
 
-        /* If everything is valid, Pass 1 has already updated the bitstream. */
+        /* If everything is valid, return immediately. This matches baseline exactly. */
         if (!needs_pass2) return 1;
 
         // If we reach here, apply clamping and Pass 2.
