@@ -9,8 +9,8 @@
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
 
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
@@ -61,10 +61,6 @@ void quantize_sse2(const faac_real * __restrict xr, int * __restrict xi, int n, 
         __m128i xi_vec = _mm_cvttps_epi32(x);
 
         // Clip to MAX_HUFF_ESC_VAL (8191) to prevent bitstream overflow
-        // _mm_min_epi32 is SSE4.1, use SSE2 equivalent:
-        // min(a, b) = b ^ ((a ^ b) & (a < b ? -1 : 0)) -- but wait, that's complex for signed.
-        // For positive integers, we can use _mm_min_epu32 if available, but that's also SSE4.1.
-        // In SSE2, we can use _mm_cmpgt_epi32 and _mm_and_si128 / _mm_or_si128.
         {
             __m128i max_val = _mm_set1_epi32(MAX_HUFF_ESC_VAL);
             __m128i gt_mask = _mm_cmpgt_epi32(xi_vec, max_val);

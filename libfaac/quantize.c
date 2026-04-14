@@ -27,9 +27,7 @@
 #include "cpu_compute.h"
 
 #ifdef __GNUC__
-#define GCC_VERSION (__GNUC__ * 10000 \
-                     + __GNUC_MINOR__ * 100 \
-                     + __GNUC_PATCHLEVEL__)
+#define GCC_VERSION (__GNUC__ * 10000                      + __GNUC_MINOR__ * 100                      + __GNUC_PATCHLEVEL__)
 #endif
 
 typedef void (*QuantizeFunc)(const faac_real * __restrict xr, int * __restrict xi, int n, faac_real sfacfix);
@@ -246,9 +244,8 @@ static void qlevel(CoderInfo * __restrict coderInfo,
               sfac = (int)FAAC_FLOOR(FAAC_LOG10(sfacfix) * sfstep);
           }
 
-          /* Pass 1 implementation: Identical to original single-pass
-           * logic. This ensures that in "clean" frames (no illegal deltas),
-           * the output is bit-identical to the baseline. */
+          /* Pass 1 implementation: Run quantization and Huffman selection.
+           * This ensures standard frames are identical to baseline. */
           sfacfix = FAAC_POW(10, sfac / sfstep);
           end -= start;
           xi = xitab;
@@ -323,7 +320,7 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
         int lastsf;
         int band_idx = 0;
 
-        // Pass 1: Identical to original single-pass quantization
+        // Pass 1: discovery and initial quantization
         gxr = xr;
         for (cnt = 0; cnt < coder->groups.n; cnt++)
         {
@@ -335,7 +332,6 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
         }
 
         // Determine global gain
-
         for (cnt = 0; cnt < coder->bandcnt; cnt++)
         {
             int book = coder->book[cnt];
@@ -344,14 +340,11 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
             if ((book != HCB_INTENSITY) && (book != HCB_INTENSITY2))
             {
                 coder->global_gain = coder->sf[cnt];
-
                 break;
             }
         }
 
-        /* Regression avoidance: check if we actually have illegal deltas.
-         * If the bitstream is already valid, we return immediately with Pass 1 results,
-         * which are identical to the baseline. */
+        /* Regression avoidance check: verify against AAC delta constraints. */
         int needs_pass2 = 0;
         lastsf = coder->global_gain;
         lastis = 0;
@@ -376,9 +369,10 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
             }
         }
 
+        /* If everything is valid, Pass 1 has already updated the bitstream. */
         if (!needs_pass2) return 1;
 
-        // If we reach here, illegal deltas were detected. Apply clamping and Pass 2.
+        // If we reach here, apply clamping and Pass 2.
         int first_h = -1, first_p = -1, first_i = -1;
         for (cnt = 0; cnt < coder->bandcnt; cnt++) {
             int b = coder->book[cnt];
@@ -387,18 +381,18 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
             else if (b != HCB_ZERO && b != HCB_NONE) { if (first_h == -1) first_h = cnt; }
         }
 
-        // Forward passes
+        // Clamping algorithm
         lastsf = (first_h != -1) ? coder->sf[first_h] : 0;
         lastis = 0;
         lastpns = (first_p != -1) ? coder->sf[first_p] : 0;
-        int p_init = 1;
+        int pns_f_init = 1;
         for (cnt = 0; cnt < coder->bandcnt; cnt++) {
             int b = coder->book[cnt];
             if (b == HCB_INTENSITY || b == HCB_INTENSITY2) {
                 if (coder->sf[cnt] < lastis - 60) coder->sf[cnt] = lastis - 60;
                 lastis = coder->sf[cnt];
             } else if (b == HCB_PNS) {
-                if (p_init) p_init = 0;
+                if (pns_f_init) pns_f_init = 0;
                 else if (coder->sf[cnt] < lastpns - 60) coder->sf[cnt] = lastpns - 60;
                 lastpns = coder->sf[cnt];
             } else if (b != HCB_ZERO && b != HCB_NONE) {
@@ -406,7 +400,6 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
                 lastsf = coder->sf[cnt];
             }
         }
-        // Backward passes
         int nextsf = -1, nextis = -1, nextpns = -1;
         for (cnt = coder->bandcnt - 1; cnt >= 0; cnt--) {
             int b = coder->book[cnt];
@@ -423,7 +416,7 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
         }
         if (first_h != -1) coder->global_gain = coder->sf[first_h];
 
-        // Pass 2: Quantize using final clamped scalefactors
+        // Pass 2: Final re-quantization.
         coder->bandcnt = 0;
         coder->datacnt = 0;
         gxr = xr;
