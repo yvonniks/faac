@@ -24,6 +24,7 @@
 #include <immintrin.h>
 #include "faac_real.h"
 #include "quantize.h"
+#include "huff2.h"
 
 void quantize_sse2(const faac_real * __restrict xr, int * __restrict xi, int n, faac_real sfacfix)
 {
@@ -59,6 +60,17 @@ void quantize_sse2(const faac_real * __restrict xr, int * __restrict xi, int n, 
         // Convert to integer
         __m128i xi_vec = _mm_cvttps_epi32(x);
 
+        // Clip to MAX_HUFF_ESC_VAL (8191) to prevent bitstream overflow
+        // _mm_min_epi32 is SSE4.1, use SSE2 equivalent:
+        // min(a, b) = b ^ ((a ^ b) & (a < b ? -1 : 0)) -- but wait, that's complex for signed.
+        // For positive integers, we can use _mm_min_epu32 if available, but that's also SSE4.1.
+        // In SSE2, we can use _mm_cmpgt_epi32 and _mm_and_si128 / _mm_or_si128.
+        {
+            __m128i max_val = _mm_set1_epi32(MAX_HUFF_ESC_VAL);
+            __m128i gt_mask = _mm_cmpgt_epi32(xi_vec, max_val);
+            xi_vec = _mm_or_si128(_mm_and_si128(gt_mask, max_val), _mm_andnot_si128(gt_mask, xi_vec));
+        }
+
         // Bitwise Sign Fix: (val ^ mask) - mask
         __m128i m_int = _mm_castps_si128(sign_mask);
         xi_vec = _mm_sub_epi32(_mm_xor_si128(xi_vec, m_int), m_int);
@@ -69,11 +81,13 @@ void quantize_sse2(const faac_real * __restrict xr, int * __restrict xi, int n, 
     // Safe scalar remainder loop for widths not multiple of 4
     for (; cnt < n; cnt++)
     {
-	faac_real val = xr[cnt];
+        faac_real val = xr[cnt];
         faac_real tmp = FAAC_FABS(val);
         tmp *= sfacfix;
         tmp = FAAC_SQRT(tmp * FAAC_SQRT(tmp));
         int q = (int)(tmp + (faac_real)MAGIC_NUMBER);
+        if (q > MAX_HUFF_ESC_VAL)
+            q = MAX_HUFF_ESC_VAL;
         xi[cnt] = (val < 0) ? -q : q;
     }
 }
