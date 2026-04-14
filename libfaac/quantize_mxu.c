@@ -21,11 +21,57 @@
 #include "mxu2_shim.h"
 #include "mxu3_shim.h"
 
+/* Helper macros for integrated assembly loops using shim encodings */
+#define MXU2_W_OP(m, vt, vs, vd, mi) _MXU2_WORD(_MXU2_OP(m, vt, vs, vd, mi))
+#define MXU2_W_LU(b, i, v) _MXU2_WORD(_MXU2_LU1Q(b, i, v))
+#define MXU2_W_SU(b, i, v) _MXU2_WORD(_MXU2_SU1Q(b, i, v))
+
+#define MXU3_OP_V(base, vrp, vrs, vrd) ((base) | ((vrp)<<16) | ((vrs)<<11) | ((vrd)<<6))
+
+#define MXU3_W(op, vrp, vrs, vrd) \
+    _MXU3_WORD(MXU3_OP_V(op, (vrp)*4+0, (vrs)*4+0, (vrd)*4+0)) \
+    _MXU3_WORD(MXU3_OP_V(op, (vrp)*4+1, (vrs)*4+1, (vrd)*4+1)) \
+    _MXU3_WORD(MXU3_OP_V(op, (vrp)*4+2, (vrs)*4+2, (vrd)*4+2)) \
+    _MXU3_WORD(MXU3_OP_V(op, (vrp)*4+3, (vrs)*4+3, (vrd)*4+3))
+
+#define MXU3_W_IMM(op, vrp, imm, vrd) \
+    _MXU3_WORD(MXU3_OP_V(op, (vrp)*4+0, (imm), (vrd)*4+0)) \
+    _MXU3_WORD(MXU3_OP_V(op, (vrp)*4+1, (imm), (vrd)*4+1)) \
+    _MXU3_WORD(MXU3_OP_V(op, (vrp)*4+2, (imm), (vrd)*4+2)) \
+    _MXU3_WORD(MXU3_OP_V(op, (vrp)*4+3, (imm), (vrd)*4+3))
+
+#define MXU3_W_LU(base, vrd) \
+    _MXU3_WORD(_MXU3_LUQ(base, (vrd)*4+0)) \
+    _MXU3_WORD(_MXU3_LUQ(base, (vrd)*4+1)) \
+    _MXU3_WORD(_MXU3_LUQ(base, (vrd)*4+2)) \
+    _MXU3_WORD(_MXU3_LUQ(base, (vrd)*4+3))
+
+#define MXU3_W_SU(base, vrp) \
+    _MXU3_WORD(_MXU3_SUQ(base, (vrp)*4+0)) \
+    _MXU3_WORD(_MXU3_SUQ(base, (vrp)*4+1)) \
+    _MXU3_WORD(_MXU3_SUQ(base, (vrp)*4+2)) \
+    _MXU3_WORD(_MXU3_SUQ(base, (vrp)*4+3))
+
+/* MXU3 Opcode bases matching shim constants but with zeroed register fields */
+#define MXU3_OP_CLTZW     0x4a000026
+#define MXU3_OP_ANDV      0x4a600002
+#define MXU3_OP_FADDW     0x4a800003
+#define MXU3_OP_FMULW     0x4a600023
+#define MXU3_OP_FTRUNCSW  0x70c0002e
+#define MXU3_OP_XORV      0x4a600006
+#define MXU3_OP_SUBW      0x4a80000a
+#define MXU3_OP_SRLIW     0x4aa00032
+
 // MXU3 Constants (64-byte aligned)
 static const mxu3_v16u32 mu_v ALIGN_SIMD = {0x5f3759df, 0x5f3759df, 0x5f3759df, 0x5f3759df,
                                  0x5f3759df, 0x5f3759df, 0x5f3759df, 0x5f3759df,
                                  0x5f3759df, 0x5f3759df, 0x5f3759df, 0x5f3759df,
                                  0x5f3759df, 0x5f3759df, 0x5f3759df, 0x5f3759df};
+
+static const mxu3_v16u32 am3_v ALIGN_SIMD = {0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF,
+                                  0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF,
+                                  0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF,
+                                  0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF};
 #endif
 
 void quantize_mxu2(const faac_real * __restrict xr, int * __restrict xi, int n, faac_real sfacfix)
@@ -39,28 +85,35 @@ void quantize_mxu2(const faac_real * __restrict xr, int * __restrict xi, int n, 
 
         mxu2_v4f32 sfac_v = {sf075, sf075, sf075, sf075};
         mxu2_v4f32 magic_v = {mg_f, mg_f, mg_f, mg_f};
+        mxu2_v4u32 abs_m = {0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF};
 
         // Load constants into high VPRs
         __asm__ __volatile__ (
-            "move $t0, %0; .word 0x71000154\n\t" // LU1Q VPR10, sfac_v
-            "move $t0, %1; .word 0x71000194\n\t" // LU1Q VPR11, magic_v
-            : : "r"(&sfac_v), "r"(&magic_v) : "$t0", "memory"
+            "move $t0, %0\n\t"
+            MXU2_W_LU(8, 0, 10) // LU1Q VPR10, sfac_v
+            "move $t0, %1\n\t"
+            MXU2_W_LU(8, 0, 11) // LU1Q VPR11, magic_v
+            "move $t0, %2\n\t"
+            MXU2_W_LU(8, 0, 12) // LU1Q VPR12, abs_m
+            : : "r"(&sfac_v), "r"(&magic_v), "r"(&abs_m) : "$t0", "memory"
         );
 
         for (; cnt <= n - 4; cnt += 4) {
             __asm__ __volatile__ (
-                "move $t0, %0; .word 0x71000014\n\t" // Load x -> VPR0
-                ".word 0x4bc00086\n\t"              // sign_mask = x < 0 ? -1 : 0 -> VPR1 (cltzw)
-                ".word 0x4bc0000e\n\t"              // x = abs(x) -> VPR0
-                ".word 0x4bc10080\n\t"              // temp = sqrt(x) -> VPR2
-                ".word 0x4b020004\n\t"              // x = x * temp -> x * sqrt(x) -> VPR0
-                ".word 0x4bc10000\n\t"              // x = sqrt(x) -> x^0.75 -> VPR0
-                ".word 0x4b0a0004\n\t"              // x = x * gain^0.75 -> VPR0
-                ".word 0x4b0b0000\n\t"              // x = x + magic -> VPR0
-                ".word 0x4bc10014\n\t"              // x = truncate(x) -> VPR0
-                ".word 0x4ac1003b\n\t"              // x = x ^ sign_mask -> VPR0
-                ".word 0x4a21002e\n\t"              // x = x - sign_mask -> VPR0
-                "move $t0, %1; .word 0x7100001C\n\t" // Store VPR0 -> xi
+                "move $t0, %0\n\t"
+                MXU2_W_LU(8, 0, 0) // Load x -> VPR0
+                MXU2_W_OP(14, 0, 0, 1, 0x0A) // cltzw VPR1, VPR0 (sign mask)
+                MXU2_W_OP(6, 12, 0, 0, 0x38) // andv VPR0, VPR0, VPR12 (abs_m)
+                MXU2_W_OP(14, 1, 0, 2, 0x00) // fsqrt VPR2, VPR0
+                MXU2_W_OP(8, 2, 0, 0, 0x04)  // fmul VPR0, VPR0, VPR2 (x * sqrt(x))
+                MXU2_W_OP(14, 1, 0, 0, 0x00) // fsqrt VPR0, VPR0 (x^0.75)
+                MXU2_W_OP(8, 10, 0, 0, 0x04) // fmul VPR0, VPR0, VPR10 (sfac_v)
+                MXU2_W_OP(8, 11, 0, 0, 0x00) // fadd VPR0, VPR0, VPR11 (magic_v)
+                MXU2_W_OP(14, 1, 0, 0, 0x14) // vtruncsws VPR0, VPR0
+                MXU2_W_OP(6, 1, 0, 0, 0x3B)  // xorv VPR0, VPR0, VPR1
+                MXU2_W_OP(1, 1, 0, 0, 0x2E)  // subw VPR0, VPR0, VPR1
+                "move $t0, %1\n\t"
+                MXU2_W_SU(8, 0, 0) // Store VPR0 -> xi
                 : : "r"(&xr[cnt]), "r"(&xi[cnt]) : "$t0", "memory"
             );
         }
@@ -90,39 +143,42 @@ void quantize_mxu3(const faac_real * __restrict xr, int * __restrict xi, int n, 
 
         __asm__ __volatile__ (
             "move $t0, %0\n\t"
-            ".word 0x71000313, 0x71000353, 0x71000393, 0x710003D3\n\t" // VPR3 = sfac
+            MXU3_W_LU(8, 3) // VPR3 = sfac
             "move $t0, %1\n\t"
-            ".word 0x71000413, 0x71000453, 0x71000493, 0x710004D3\n\t" // VPR4 = magic
+            MXU3_W_LU(8, 4) // VPR4 = magic
             "move $t0, %2\n\t"
-            ".word 0x71000513, 0x71000553, 0x71000593, 0x710005D3\n\t" // VPR5 = mu
-            : : "r"(&sfac_v), "r"(&magic_v), "r"(&mu_v) : "$t0", "memory"
+            MXU3_W_LU(8, 5) // VPR5 = mu
+            "move $t0, %3\n\t"
+            MXU3_W_LU(8, 6) // VPR6 = am3_v
+            : : "r"(&sfac_v), "r"(&magic_v), "r"(&mu_v), "r"(&am3_v) : "$t0", "memory"
         );
 
         for (; cnt <= n - 16; cnt += 16) {
              __asm__ __volatile__ (
                 "move $t0, %0\n\t"
-                ".word 0x71000013, 0x71000053, 0x71000093, 0x710000D3\n\t" // Load x -> VPR0
-                ".word 0x4a000126, 0x4a010966, 0x4a0211a6, 0x4a0319e6\n\t" // VPR1 = sign_mask
-                ".word 0x4a80000e, 0x4a81084e, 0x4a82108e, 0x4a8318ce\n\t" // VPR0 = abs(x)
+                MXU3_W_LU(8, 0) // Load x -> VPR0
+                MXU3_W(MXU3_OP_CLTZW, 0, 0, 1) // VPR1 = cltzw(VPR0) (sign mask)
+                MXU3_W(MXU3_OP_ANDV, 0, 6, 0)  // VPR0 = abs(VPR0)
 
-                ".word 0x4aa00a32, 0x4aa10a72, 0x4aa20ab2, 0x4aa30af2\n\t" // VPR2 = x >> 1
-                ".word 0x4a94420a, 0x4a954a4a, 0x4a96528a, 0x4a975aca\n\t" // VPR2 = mu - VPR2 -> rs1 guess
-                ".word 0x4a604223, 0x4a614a63, 0x4a6252a3, 0x4a635ae3\n\t" // VPR2 = x * rs1 -> approx sqrt(x)
+                // Fast approx x^0.75
+                MXU3_W_IMM(MXU3_OP_SRLIW, 0, 1, 2)    // VPR2 = VPR0 >> 1
+                MXU3_W(MXU3_OP_SUBW, 5, 2, 2)         // VPR2 = VPR5 - VPR2 (rs1 guess)
+                MXU3_W(MXU3_OP_FMULW, 0, 2, 2)        // VPR2 = VPR0 * VPR2 (sqrt(x) approx)
 
-                ".word 0x4aa80b32, 0x4aa90b72, 0x4aaa0bb2, 0x4aab0bf2\n\t" // VPR11 = VPR2 >> 1
-                ".word 0x4a956b0a, 0x4a956b4a, 0x4a977b8a, 0x4a977bca\n\t" // VPR11 = mu - VPR11 -> rs2 guess
+                MXU3_W_IMM(MXU3_OP_SRLIW, 2, 1, 11)   // VPR11 = VPR2 >> 1
+                MXU3_W(MXU3_OP_SUBW, 5, 11, 11)       // VPR11 = VPR5 - VPR11 (rs2 guess)
+                MXU3_W(MXU3_OP_FMULW, 0, 11, 0)       // VPR0 = VPR0 * VPR11 (x^0.75 approx)
 
-                ".word 0x4a616023, 0x4a616863, 0x4a6370a3, 0x4a6378e3\n\t" // VPR0 = x * rs2 -> approx x^0.75
-                ".word 0x4a606023, 0x4a616863, 0x4a6270a3, 0x4a6378e3\n\t" // apply gain
-                ".word 0x4a808003, 0x4a818843, 0x4a829083, 0x4a8398c3\n\t" // apply magic
+                MXU3_W(MXU3_OP_FMULW, 0, 3, 0)        // VPR0 = VPR0 * sfac_v
+                MXU3_W(MXU3_OP_FADDW, 0, 4, 0)        // VPR0 = VPR0 + magic_v
 
-                ".word 0x70c0002e, 0x70c1086e, 0x70c210ae, 0x70c318ee\n\t" // truncate
+                MXU3_W(MXU3_OP_FTRUNCSW, 0, 0, 0)     // VPR0 = truncate(VPR0)
 
-                ".word 0x4a602006, 0x4a612846, 0x4a623086, 0x4a6338c6\n\t" // XORV
-                ".word 0x4a80200a, 0x4a81284a, 0x4a82308a, 0x4a8338ca\n\t" // SUBW
+                MXU3_W(MXU3_OP_XORV, 0, 1, 0)         // x = x ^ sign_mask
+                MXU3_W(MXU3_OP_SUBW, 0, 1, 0)         // x = x - sign_mask
 
                 "move $t0, %1\n\t"
-                ".word 0x71000057, 0x71000097, 0x710000D7, 0x71000117\n\t" // Store
+                MXU3_W_SU(8, 0) // Store VPR0 -> xi
                 : : "r"(&xr[cnt]), "r"(&xi[cnt]) : "$t0", "memory"
             );
         }
