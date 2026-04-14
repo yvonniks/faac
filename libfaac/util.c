@@ -18,6 +18,7 @@
  *
  */
 
+#include "config.h"
 #include <math.h>
 #include <stdlib.h>
 #if defined(_MSC_VER) || defined(__MINGW32__)
@@ -26,14 +27,17 @@
 #include "util.h"
 #include "coder.h"  // FRAME_LEN
 
+#ifndef FAAC_SIMD_ALIGNMENT
+#define FAAC_SIMD_ALIGNMENT 16
+#endif
+
 void *faac_aligned_alloc(size_t size)
 {
     void *ptr = NULL;
-    /* Ingenic MXU2 needs 16-byte, MXU3 prefers 64-byte alignment */
 #if defined(_MSC_VER) || defined(__MINGW32__)
-    ptr = _aligned_malloc(size, 64);
+    ptr = _aligned_malloc(size, FAAC_SIMD_ALIGNMENT);
 #else
-    if (posix_memalign(&ptr, 64, size) != 0)
+    if (posix_memalign(&ptr, FAAC_SIMD_ALIGNMENT, size) != 0)
         return NULL;
 #endif
     return ptr;

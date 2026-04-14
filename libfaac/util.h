@@ -23,6 +23,7 @@
 #define UTIL_H
 
 #include "faac_real.h"
+#include "config.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,6 +33,10 @@ extern "C" {
 #include <stddef.h>
 #include <string.h>
 
+#ifndef FAAC_SIMD_ALIGNMENT
+#define FAAC_SIMD_ALIGNMENT 16
+#endif
+
 #if defined(_MSC_VER)
 #define ALIGN_BASE(x) __declspec(align(x))
 #elif defined(__GNUC__) || defined(__clang__)
@@ -39,6 +44,8 @@ extern "C" {
 #else
 #define ALIGN_BASE(x)
 #endif
+
+#define ALIGN_SIMD ALIGN_BASE(FAAC_SIMD_ALIGNMENT)
 
 #ifndef max
 #define max(a, b) (((a) > (b)) ? (a) : (b))

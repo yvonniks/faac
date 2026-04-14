@@ -28,7 +28,9 @@
 #include "util.h"
 
 #ifdef __GNUC__
-#define GCC_VERSION (__GNUC__ * 10000                      + __GNUC_MINOR__ * 100                      + __GNUC_PATCHLEVEL__)
+#define GCC_VERSION (__GNUC__ * 10000 \
+                     + __GNUC_MINOR__ * 100 \
+                     + __GNUC_PATCHLEVEL__)
 #endif
 
 typedef void (*QuantizeFunc)(const faac_real * __restrict xr, int * __restrict xi, int n, faac_real sfacfix);
@@ -60,17 +62,10 @@ static faac_real max_quant_limit;
 
 void QuantizeInit(void)
 {
-    CPUCaps caps = get_cpu_caps();
 #if defined(HAVE_SSE2)
+    CPUCaps caps = get_cpu_caps();
     if (caps & CPU_CAP_SSE2)
         qfunc = quantize_sse2;
-    else
-#endif
-#if defined(MIPS_ARCH) && defined(FAAC_PRECISION_SINGLE)
-    if (caps & CPU_CAP_MXU3)
-        qfunc = quantize_mxu3;
-    else if (caps & CPU_CAP_MXU2)
-        qfunc = quantize_mxu2;
     else
 #endif
         qfunc = quantize_scalar;
@@ -198,7 +193,7 @@ static void qlevel(CoderInfo * __restrict coderInfo,
       int sfac;
       faac_real rmsx;
       faac_real etot;
-      ALIGN_BASE(64) int xitab[8 * MAXSHORTBAND];
+      ALIGN_SIMD int xitab[8 * MAXSHORTBAND];
       int *xi;
       int start, end;
       const faac_real *xr;

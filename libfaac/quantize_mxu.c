@@ -71,9 +71,11 @@ void quantize_mxu2(const faac_real * __restrict xr, int * __restrict xi, int n, 
         const mxu2_v4i32 abs_m = {0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF};
         const mxu2_v4i32 zero_v = {0, 0, 0, 0};
 
+        const uintptr_t align_mask = (uintptr_t)FAAC_SIMD_ALIGNMENT - 1;
+
         for (; cnt <= n - 4; cnt += 4)
         {
-            if (((uintptr_t)&xr[cnt] & 15) == 0 && ((uintptr_t)&xi[cnt] & 15) == 0) {
+            if (((uintptr_t)&xr[cnt] & align_mask) == 0 && ((uintptr_t)&xi[cnt] & align_mask) == 0) {
                 mxu2_v4i32 x_orig_i = mxu2_load(&xr[cnt]);
                 mxu2_v4i32 sign_mask = mxu2_clts_w(x_orig_i, zero_v);
                 mxu2_v4f32 x = (mxu2_v4f32)mxu2_andv((mxu2_v16i8)x_orig_i, (mxu2_v16i8)abs_m);
@@ -135,9 +137,11 @@ void quantize_mxu3(const faac_real * __restrict xr, int * __restrict xi, int n, 
         const mxu3_v16i32 hu = hu_un.v;
         const mxu3_v16i32 zero_v = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
+        const uintptr_t align_mask = (uintptr_t)FAAC_SIMD_ALIGNMENT - 1;
+
         for (; cnt <= n - 16; cnt += 16)
         {
-            if (((uintptr_t)&xr[cnt] & 63) == 0 && ((uintptr_t)&xi[cnt] & 63) == 0) {
+            if (((uintptr_t)&xr[cnt] & align_mask) == 0 && ((uintptr_t)&xi[cnt] & align_mask) == 0) {
                 mxu3_v16i32 x_orig = MXU3_LOAD(&xr[cnt]);
                 mxu3_v16i32 sign_mask = mxu3_cltsw(x_orig, zero_v);
                 mxu3_v16i32 x = mxu3_andv(x_orig, abs_m);

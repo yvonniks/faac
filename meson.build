@@ -33,6 +33,7 @@ else
 endif
 
 config_h.set('MAX_CHANNELS', get_option('max-channels'))
+config_h.set('FAAC_SIMD_ALIGNMENT', get_option('simd-alignment'))
 
 c_args = []
 if cc.get_argument_syntax() == 'msvc'
