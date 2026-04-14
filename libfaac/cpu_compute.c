@@ -17,16 +17,12 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 #include "cpu_compute.h"
 
 #if defined(SSE2_ARCH)
-# ifdef _MSC_VER
+# if defined(_MSC_VER)
 #  include <intrin.h>
-# elif defined(__GNUC__) || defined(__clang__)
+# else
 #  include <cpuid.h>
 # endif
 #endif
@@ -40,38 +36,24 @@ CPUCaps get_cpu_caps(void)
 {
     CPUCaps caps = CPU_CAP_NONE;
 
+#if defined(SSE2_ARCH)
+# if defined(_MSC_VER)
+    int cpuInfo[4];
+    __cpuid(cpuInfo, 1);
+    if (cpuInfo[3] & (1 << 26)) caps |= CPU_CAP_SSE2;
+# else
+    unsigned int eax, ebx, ecx, edx;
+    if (__get_cpuid(1, &eax, &ebx, &ecx, &edx)) {
+        if (edx & (1 << 26)) caps |= CPU_CAP_SSE2;
+    }
+# endif
+#endif
+
 #if defined(MIPS_ARCH)
     if (mxu3_available())
         caps |= CPU_CAP_MXU3;
     else if (mxu2_available())
         caps |= CPU_CAP_MXU2;
-#endif
-
-#if defined(SSE2_ARCH)
-    unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
-    unsigned int max_leaf = 0;
-
-# ifdef _MSC_VER
-    int cpu_info[4] = {0};
-    __cpuid(cpu_info, 0);
-    max_leaf = (unsigned int)cpu_info[0];
-# elif defined(__GNUC__) || defined(__clang__)
-    __cpuid(0, max_leaf, ebx, ecx, edx);
-# endif
-
-    if (max_leaf >= 1) {
-# ifdef _MSC_VER
-        __cpuid(cpu_info, 1);
-        eax = (unsigned int)cpu_info[0];
-        ebx = (unsigned int)cpu_info[1];
-        ecx = (unsigned int)cpu_info[2];
-        edx = (unsigned int)cpu_info[3];
-# elif defined(__GNUC__) || defined(__clang__)
-        __get_cpuid(1, &eax, &ebx, &ecx, &edx);
-# endif
-        if (edx & (1 << 26)) // SSE2
-            caps |= CPU_CAP_SSE2;
-    }
 #endif
 
     return caps;

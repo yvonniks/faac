@@ -30,7 +30,7 @@ extern "C" {
 
 #include <stdlib.h>
 #include <stddef.h>
-#include <memory.h>
+#include <string.h>
 
 #if defined(_MSC_VER)
 #define ALIGN_BASE(x) __declspec(align(x))

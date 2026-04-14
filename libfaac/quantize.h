@@ -18,6 +18,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ****************************************************************************/
 
+
 #ifndef QUANTIZE_H
 #define QUANTIZE_H
 

@@ -32,36 +32,67 @@
 #include <math.h>
 #include <stdint.h>
 
+#ifdef __mips__
+typedef union {
+    mxu3_v16i32 v;
+    uint32_t u[16];
+    float f[16];
+} mxu3_union;
+
+static inline mxu3_v16i32 mxu3_rsqrt_simd(mxu3_v16i32 x, mxu3_v16i32 mu, mxu3_v16i32 ou, mxu3_v16i32 thu, mxu3_v16i32 hu) {
+    mxu3_v16i32 i = mxu3_subw(mu, mxu3_srlw(x, ou));
+    mxu3_v16i32 xhalf = mxu3_fmulw(x, hu);
+
+    mxu3_v16i32 y = i;
+    mxu3_v16i32 y2 = mxu3_fmulw(y, y);
+    mxu3_v16i32 term = mxu3_fmulw(xhalf, y2);
+    mxu3_v16i32 factor = mxu3_fsubw(thu, term);
+    y = mxu3_fmulw(y, factor);
+
+    return y;
+}
+
+static inline mxu3_v16i32 mxu3_sqrt_simd(mxu3_v16i32 x, mxu3_v16i32 mu, mxu3_v16i32 ou, mxu3_v16i32 thu, mxu3_v16i32 hu) {
+    mxu3_v16i32 rs = mxu3_rsqrt_simd(x, mu, ou, thu, hu);
+    return mxu3_fmulw(x, rs);
+}
+#endif
+
 void quantize_mxu2(const faac_real * __restrict xr, int * __restrict xi, int n, faac_real sfacfix)
 {
     int cnt = 0;
 
 #ifdef __mips__
-    const mxu2_v4i32 zero_i = {0, 0, 0, 0};
-    const float sfac_f = (float)sfacfix;
-    const mxu2_v4f32 sfac = {sfac_f, sfac_f, sfac_f, sfac_f};
-    const float magic_f = (float)MAGIC_NUMBER;
-    const mxu2_v4f32 magic = {magic_f, magic_f, magic_f, magic_f};
-    const mxu2_v4i32 abs_mask = {0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF};
+    if (n >= 4) {
+        const float sf_f = (float)sfacfix;
+        const mxu2_v4f32 sfac_v = {sf_f, sf_f, sf_f, sf_f};
+        const float mg_f = (float)MAGIC_NUMBER;
+        const mxu2_v4f32 magic_v = {mg_f, mg_f, mg_f, mg_f};
+        const mxu2_v4i32 abs_m = {0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF};
+        const mxu2_v4i32 zero_v = {0, 0, 0, 0};
 
-    for (; cnt <= n - 4; cnt += 4)
-    {
-        mxu2_v4i32 x_orig_i = mxu2_load(&xr[cnt]);
+        for (; cnt <= n - 4; cnt += 4)
+        {
+            if (((uintptr_t)&xr[cnt] & 15) == 0 && ((uintptr_t)&xi[cnt] & 15) == 0) {
+                mxu2_v4i32 x_orig_i = mxu2_load(&xr[cnt]);
+                mxu2_v4i32 sign_mask = mxu2_clts_w(x_orig_i, zero_v);
+                mxu2_v4f32 x = (mxu2_v4f32)mxu2_andv((mxu2_v16i8)x_orig_i, (mxu2_v16i8)abs_m);
 
-        mxu2_v4i32 sign_mask = mxu2_clts_w(x_orig_i, zero_i);
-        mxu2_v4f32 x = (mxu2_v4f32)mxu2_andv((mxu2_v16i8)x_orig_i, (mxu2_v16i8)abs_mask);
+                x = mxu2_fmul_w(x, sfac_v);
+                /* (x * sfac)^0.75 approx: sqrt( (x*sfac) * sqrt(x*sfac) ) */
+                mxu2_v4f32 sqrt_x = (mxu2_v4f32)mxu2_fsqrt_w((mxu2_v4i32)x);
+                x = mxu2_fmul_w(x, sqrt_x);
+                x = (mxu2_v4f32)mxu2_fsqrt_w((mxu2_v4i32)x);
+                x = mxu2_fadd_w(x, magic_v);
 
-        x = mxu2_fmul_w(x, sfac);
-        /* (x * sfac)^0.75 approx: sqrt( (x*sfac) * sqrt(x*sfac) ) */
-        mxu2_v4f32 sqrt_x = (mxu2_v4f32)mxu2_fsqrt_w((mxu2_v4i32)x);
-        x = mxu2_fmul_w(x, sqrt_x);
-        x = (mxu2_v4f32)mxu2_fsqrt_w((mxu2_v4i32)x);
-        x = mxu2_fadd_w(x, magic);
+                mxu2_v4i32 xi_vec = mxu2_vtruncsws((mxu2_v4i32)x);
+                xi_vec = (mxu2_v4i32)mxu2_sub_w((mxu2_v4i32)mxu2_xorv((mxu2_v16i8)xi_vec, (mxu2_v16i8)sign_mask), sign_mask);
 
-        mxu2_v4i32 xi_vec = mxu2_vtruncsws((mxu2_v4i32)x);
-        xi_vec = (mxu2_v4i32)mxu2_sub_w((mxu2_v4i32)mxu2_xorv((mxu2_v16i8)xi_vec, (mxu2_v16i8)sign_mask), sign_mask);
-
-        mxu2_store(&xi[cnt], xi_vec);
+                mxu2_store(&xi[cnt], xi_vec);
+            } else {
+                break;
+            }
+        }
     }
 #endif
 
@@ -81,60 +112,51 @@ void quantize_mxu3(const faac_real * __restrict xr, int * __restrict xi, int n, 
     int cnt = 0;
 
 #ifdef __mips__
-    const mxu3_v16i32 zero = {0};
-    const float sfac_f = (float)sfacfix;
-    uint32_t sfac_u; memcpy(&sfac_u, &sfac_f, 4);
-    const mxu3_v16i32 sfac = {sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u,sfac_u};
-    const float magic_f = (float)MAGIC_NUMBER;
-    uint32_t magic_u; memcpy(&magic_u, &magic_f, 4);
-    const mxu3_v16i32 magic = {magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u,magic_u};
-    const uint32_t am = 0x7FFFFFFF;
-    const mxu3_v16i32 abs_mask = {am,am,am,am,am,am,am,am,am,am,am,am,am,am,am,am};
+    if (n >= 16) {
+        mxu3_union sfac_un, magic_un, abs_mask_un, mu_un, ou_un, thu_un, hu_un;
+        float sf_f = (float)sfacfix;
+        float mg_f = (float)MAGIC_NUMBER;
+        for(int i=0; i<16; i++) {
+            sfac_un.f[i] = sf_f;
+            magic_un.f[i] = mg_f;
+            abs_mask_un.u[i] = 0x7FFFFFFF;
+            mu_un.u[i] = 0x5f3759df;
+            ou_un.u[i] = 1;
+            thu_un.f[i] = 1.5f;
+            hu_un.f[i] = 0.5f;
+        }
 
-    for (; cnt <= n - 16; cnt += 16)
-    {
-        if (((uintptr_t)&xr[cnt] & 15) == 0 && ((uintptr_t)&xi[cnt] & 15) == 0) {
-            mxu3_v16i32 x_orig = MXU3_LOAD(&xr[cnt]);
+        const mxu3_v16i32 sfac_v = sfac_un.v;
+        const mxu3_v16i32 magic_v = magic_un.v;
+        const mxu3_v16i32 abs_m = abs_mask_un.v;
+        const mxu3_v16i32 mu = mu_un.v;
+        const mxu3_v16i32 ou = ou_un.v;
+        const mxu3_v16i32 thu = thu_un.v;
+        const mxu3_v16i32 hu = hu_un.v;
+        const mxu3_v16i32 zero_v = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
-            mxu3_v16i32 sign_mask = mxu3_cltsw(x_orig, zero);
-            mxu3_v16i32 x = mxu3_andv(x_orig, abs_mask);
+        for (; cnt <= n - 16; cnt += 16)
+        {
+            if (((uintptr_t)&xr[cnt] & 63) == 0 && ((uintptr_t)&xi[cnt] & 63) == 0) {
+                mxu3_v16i32 x_orig = MXU3_LOAD(&xr[cnt]);
+                mxu3_v16i32 sign_mask = mxu3_cltsw(x_orig, zero_v);
+                mxu3_v16i32 x = mxu3_andv(x_orig, abs_m);
 
-            x = mxu3_fmulw(x, sfac);
+                x = mxu3_fmulw(x, sfac_v);
 
-            float *xf = (float *)&x;
-            for(int i=0; i<16; i++) {
-                xf[i] = sqrtf(xf[i] * sqrtf(xf[i]));
+                mxu3_v16i32 sqrt1 = mxu3_sqrt_simd(x, mu, ou, thu, hu);
+                x = mxu3_fmulw(x, sqrt1);
+                x = mxu3_sqrt_simd(x, mu, ou, thu, hu);
+
+                x = mxu3_faddw(x, magic_v);
+                mxu3_v16i32 xi_vec = mxu3_ftsiw(x);
+
+                xi_vec = mxu3_subw(mxu3_xorv(xi_vec, sign_mask), sign_mask);
+
+                MXU3_STORE(&xi[cnt], xi_vec);
+            } else {
+                break;
             }
-
-            x = mxu3_faddw(x, magic);
-            mxu3_v16i32 xi_vec = mxu3_ftsiw(x);
-
-            xi_vec = mxu3_subw(mxu3_xorv(xi_vec, sign_mask), sign_mask);
-
-            MXU3_STORE(&xi[cnt], xi_vec);
-        } else {
-            faac_real temp_xr[16] ALIGN_BASE(16);
-            memcpy(temp_xr, &xr[cnt], 64);
-            mxu3_v16i32 x_orig = MXU3_LOAD(temp_xr);
-
-            mxu3_v16i32 sign_mask = mxu3_cltsw(x_orig, zero);
-            mxu3_v16i32 x = mxu3_andv(x_orig, abs_mask);
-
-            x = mxu3_fmulw(x, sfac);
-
-            float *xf = (float *)&x;
-            for(int i=0; i<16; i++) {
-                xf[i] = sqrtf(xf[i] * sqrtf(xf[i]));
-            }
-
-            x = mxu3_faddw(x, magic);
-            mxu3_v16i32 xi_vec = mxu3_ftsiw(x);
-
-            xi_vec = mxu3_subw(mxu3_xorv(xi_vec, sign_mask), sign_mask);
-
-            int temp_xi[16] ALIGN_BASE(16);
-            MXU3_STORE(temp_xi, xi_vec);
-            memcpy(&xi[cnt], temp_xi, 64);
         }
     }
 #endif

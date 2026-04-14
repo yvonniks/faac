@@ -23,17 +23,17 @@
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h>
 #endif
-
 #include "util.h"
+#include "coder.h"  // FRAME_LEN
 
 void *faac_aligned_alloc(size_t size)
 {
     void *ptr = NULL;
-    /* Ingenic MXU needs 16-byte alignment */
+    /* Ingenic MXU2 needs 16-byte, MXU3 prefers 64-byte alignment */
 #if defined(_MSC_VER) || defined(__MINGW32__)
-    ptr = _aligned_malloc(size, 16);
+    ptr = _aligned_malloc(size, 64);
 #else
-    if (posix_memalign(&ptr, 16, size) != 0)
+    if (posix_memalign(&ptr, 64, size) != 0)
         return NULL;
 #endif
     return ptr;
@@ -47,7 +47,6 @@ void faac_aligned_free(void *ptr)
     free(ptr);
 #endif
 }
-#include "coder.h"  // FRAME_LEN
 
 /* Returns the sample rate index */
 int GetSRIndex(unsigned int sampleRate)
