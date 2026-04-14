@@ -61,6 +61,7 @@ static inline int clamp_sf_diff(int diff)
     return diff;
 }
 
+int huffcode(int *qs, int len, int bnum, CoderInfo *coder);
 int huffbook(CoderInfo *coderInfo,
              int *qs /* quantized spectrum */,
              int len);

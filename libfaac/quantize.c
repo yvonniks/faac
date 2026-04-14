@@ -280,7 +280,18 @@ static void qlevel(CoderInfo * __restrict coderInfo,
                   xi += end;
               }
           }
+
+          /* Pass 2 refinement: Preserve the scalefactor chain by ensuring that
+           * bands identified as non-zero in Pass 1 remain non-zero in the bitstream,
+           * even if quantization results in all zeros. Switching to HCB_ZERO here
+           * would cause bitstream desync with our pre-clamped scalefactors. */
+          int prev_book = coderInfo->book[coderInfo->bandcnt];
           huffbook(coderInfo, xitab, gsize * end);
+          if (coderInfo->book[coderInfo->bandcnt] == HCB_ZERO && prev_book != HCB_ZERO) {
+              coderInfo->book[coderInfo->bandcnt] = HCB_ESC;
+              huffcode(xitab, gsize * end, HCB_ESC, coderInfo);
+          }
+
           coderInfo->bandcnt++;
       }
     }
@@ -301,69 +312,79 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
     {
         int lastis;
         int lastsf;
+        int band_idx = 0;
 
         // Pass 1: Identify books and initial scalefactors
         gxr = xr;
         for (cnt = 0; cnt < coder->groups.n; cnt++)
         {
-            bmask(coder, gxr, bandlvl, bandenrg, bandmaxe, cnt,
+            bmask(coder, gxr, bandlvl + band_idx, bandenrg + band_idx, bandmaxe + band_idx, cnt,
                   (faac_real)aacquantCfg->quality/DEFQUAL);
-            qlevel(coder, gxr, bandlvl, bandenrg, bandmaxe, cnt, aacquantCfg->pnslevel, 1);
+            qlevel(coder, gxr, bandlvl + band_idx, bandenrg + band_idx, bandmaxe + band_idx, cnt, aacquantCfg->pnslevel, 1);
             gxr += coder->groups.len[cnt] * BLOCK_LEN_SHORT;
+            band_idx += coder->sfbn;
         }
 
-        // Determine global gain
-        coder->global_gain = 0;
-        for (cnt = 0; cnt < coder->bandcnt; cnt++)
-        {
-            int book = coder->book[cnt];
-            if (!book)
-                continue;
-            if ((book != HCB_INTENSITY) && (book != HCB_INTENSITY2))
-            {
-                coder->global_gain = coder->sf[cnt];
-                break;
-            }
+        /* Clamping: satisfy the AAC bitstream constraint that the difference
+         * between successive scalefactors in a chain must be within [-60, 60].
+         * We use forward and backward passes to satisfy this by only increasing
+         * scalefactors (decreasing gain), which is safe for Huffman limits and
+         * minimizes quality loss. */
+        int first_h = -1, first_p = -1, first_i = -1;
+        for (cnt = 0; cnt < coder->bandcnt; cnt++) {
+            int b = coder->book[cnt];
+            if (b == HCB_PNS) { if (first_p == -1) first_p = cnt; }
+            else if (b == HCB_INTENSITY || b == HCB_INTENSITY2) { if (first_i == -1) first_i = cnt; }
+            else if (b != HCB_ZERO && b != HCB_NONE) { if (first_h == -1) first_h = cnt; }
         }
 
-        // Apply scalefactor clamping loop (delta <= 60)
-        lastsf = coder->global_gain;
+        // Forward passes
+        lastsf = (first_h != -1) ? coder->sf[first_h] : 0;
         lastis = 0;
-        int lastpns = coder->global_gain - SF_PNS_OFFSET;
-        for (cnt = 0; cnt < coder->bandcnt; cnt++)
-        {
-            int book = coder->book[cnt];
-            if ((book == HCB_INTENSITY) || (book == HCB_INTENSITY2))
-            {
-                int diff = coder->sf[cnt] - lastis;
-                diff = clamp_sf_diff(diff);
-                lastis += diff;
-                coder->sf[cnt] = lastis;
-            }
-            else if (book == HCB_PNS)
-            {
-                int diff = coder->sf[cnt] - lastpns;
-                diff = clamp_sf_diff(diff);
-                lastpns += diff;
-                coder->sf[cnt] = lastpns;
-            }
-            else if ((book != HCB_ZERO) && (book != HCB_NONE))
-            {
-                int diff = coder->sf[cnt] - lastsf;
-                diff = clamp_sf_diff(diff);
-                lastsf += diff;
-                coder->sf[cnt] = lastsf;
+        int lastpns = (first_p != -1) ? coder->sf[first_p] : 0;
+        int p_init = 1;
+        for (cnt = 0; cnt < coder->bandcnt; cnt++) {
+            int b = coder->book[cnt];
+            if (b == HCB_INTENSITY || b == HCB_INTENSITY2) {
+                if (coder->sf[cnt] < lastis - 60) coder->sf[cnt] = lastis - 60;
+                lastis = coder->sf[cnt];
+            } else if (b == HCB_PNS) {
+                if (p_init) p_init = 0;
+                else if (coder->sf[cnt] < lastpns - 60) coder->sf[cnt] = lastpns - 60;
+                lastpns = coder->sf[cnt];
+            } else if (b != HCB_ZERO && b != HCB_NONE) {
+                if (coder->sf[cnt] < lastsf - 60) coder->sf[cnt] = lastsf - 60;
+                lastsf = coder->sf[cnt];
             }
         }
+        // Backward passes
+        int nextsf = -1, nextis = -1, nextpns = -1;
+        for (cnt = coder->bandcnt - 1; cnt >= 0; cnt--) {
+            int b = coder->book[cnt];
+            if (b == HCB_INTENSITY || b == HCB_INTENSITY2) {
+                if (nextis != -1 && coder->sf[cnt] < nextis - 60) coder->sf[cnt] = nextis - 60;
+                nextis = coder->sf[cnt];
+            } else if (b == HCB_PNS) {
+                if (nextpns != -1 && coder->sf[cnt] < nextpns - 60) coder->sf[cnt] = nextpns - 60;
+                nextpns = coder->sf[cnt];
+            } else if (b != HCB_ZERO && b != HCB_NONE) {
+                if (nextsf != -1 && coder->sf[cnt] < nextsf - 60) coder->sf[cnt] = nextsf - 60;
+                nextsf = coder->sf[cnt];
+            }
+        }
+        if (first_h != -1) coder->global_gain = coder->sf[first_h];
+        else coder->global_gain = 0;
 
         // Pass 2: Quantize using final clamped scalefactors
         coder->bandcnt = 0;
         coder->datacnt = 0;
         gxr = xr;
+        band_idx = 0;
         for (cnt = 0; cnt < coder->groups.n; cnt++)
         {
-            qlevel(coder, gxr, NULL, NULL, NULL, cnt, aacquantCfg->pnslevel, 2);
+            qlevel(coder, gxr, bandlvl + band_idx, bandenrg + band_idx, bandmaxe + band_idx, cnt, aacquantCfg->pnslevel, 2);
             gxr += coder->groups.len[cnt] * BLOCK_LEN_SHORT;
+            band_idx += coder->sfbn;
         }
 
         return 1;
