@@ -173,6 +173,9 @@ static void bmask(CoderInfo * __restrict coderInfo, faac_real * __restrict xr0, 
 
 enum {MAXSHORTBAND = 36};
 // use band quality levels to quantize a group of windows
+// use band quality levels to quantize a group of windows
+// use band quality levels to quantize a group of windows
+// use band quality levels to quantize a group of windows
 static void qlevel(CoderInfo * __restrict coderInfo,
                    const faac_real * __restrict xr0,
                    const faac_real * __restrict bandqual,
@@ -252,15 +255,8 @@ static void qlevel(CoderInfo * __restrict coderInfo,
       {
           int book = coderInfo->book[coderInfo->bandcnt];
 
-          if (book == HCB_PNS || book == HCB_ZERO)
+          if (book == HCB_PNS || book == HCB_ZERO || book == HCB_INTENSITY || book == HCB_INTENSITY2)
           {
-              coderInfo->bandcnt++;
-              continue;
-          }
-
-          if (book == HCB_INTENSITY || book == HCB_INTENSITY2)
-          {
-              // Handled by right channel during bitstream writing, but we need to track bandcnt
               coderInfo->bandcnt++;
               continue;
           }
@@ -276,6 +272,7 @@ static void qlevel(CoderInfo * __restrict coderInfo,
               sfacfix = max_quant_limit / bandmaxe[sb];
               sfac = (int)FAAC_FLOOR(FAAC_LOG10(sfacfix) * sfstep);
               sfacfix = FAAC_POW(10, sfac / sfstep);
+              coderInfo->sf[coderInfo->bandcnt] = SF_OFFSET - sfac;
           }
 
           end -= start;
