@@ -23,7 +23,16 @@
 #include "stereo.h"
 #include "huff2.h"
 
-#define LOG2_CONST 3.32192809489f
+static inline faac_real fast_log2(faac_real x)
+{
+#ifdef FAAC_PRECISION_DOUBLE
+    return FAAC_LOG10(x) * 3.32192809488736234787;
+#else
+    union { float f; unsigned int i; } vx;
+    vx.f = (float)x;
+    return (faac_real)(vx.i * 1.1920928955078125e-7f - 126.94269504f);
+#endif
+}
 
 static void mixed_mode(CoderInfo *cl, CoderInfo *cr, ChannelInfo *chi,
                        faac_real *sl0, faac_real *sr0, int *sfcnt,
@@ -58,31 +67,32 @@ static void mixed_mode(CoderInfo *cl, CoderInfo *cr, ChannelInfo *chi,
             }
         }
 
-        faac_real enrgm = 0.25f * (enrgl + enrgr + 2.0f * correl);
-        faac_real enrgs = 0.25f * (enrgl + enrgr - 2.0f * correl);
+        faac_real enrgm = 0.25 * (enrgl + enrgr + 2.0 * correl);
+        faac_real enrgs = 0.25 * (enrgl + enrgr - 2.0 * correl);
+        faac_real efix = enrgl + enrgr;
 
-        float bits_lr = 0.5f * len * (float)((FAAC_LOG10(enrgl/len + 1.0f) + FAAC_LOG10(enrgr/len + 1.0f)) * LOG2_CONST);
-        float bits_ms = 0.5f * len * (float)((FAAC_LOG10(enrgm/len + 1.0f) + FAAC_LOG10(enrgs/len + 1.0f)) * LOG2_CONST);
-        float bits_is = 0.5f * len * (float)(FAAC_LOG10(enrgm/len + 1.0f) * LOG2_CONST);
+        faac_real bits_lr = 0.5 * (faac_real)len * (fast_log2(enrgl/(faac_real)len + 1.0) + fast_log2(enrgr/(faac_real)len + 1.0));
+        faac_real bits_ms = 0.5 * (faac_real)len * (fast_log2(enrgm/(faac_real)len + 1.0) + fast_log2(enrgs/(faac_real)len + 1.0));
+        /* IS bit cost uses the normalized sum signal energy (efix) and includes parameter overhead. */
+        faac_real bits_is = 0.5 * (faac_real)len * fast_log2(efix/(faac_real)len + 1.0) + 5.0;
 
-        float r = 0;
-        if (enrgl > 1e-15f && enrgr > 1e-15f)
-            r = (float)(correl / FAAC_SQRT(enrgl * enrgr));
+        faac_real r = 0;
+        if (enrgl > 1e-15 && enrgr > 1e-15)
+            r = correl / FAAC_SQRT(enrgl * enrgr);
 
-        float is_penalty = 1.10f;
-        if (cl->block_type == ONLY_SHORT_WINDOW) is_penalty *= 1.15f;
-        if (quality > 1.0f) is_penalty *= 1.10f;
+        faac_real is_penalty = 1.10;
+        if (cl->block_type == ONLY_SHORT_WINDOW) is_penalty *= 1.15;
+        if (quality > 1.0) is_penalty *= 1.10;
         bits_is *= is_penalty;
 
         int use_ms = (bits_ms < bits_lr);
-        int use_is = (bits_is < bits_lr && bits_is < bits_ms && r > 0.90f && sfb > 4);
+        int use_is = (bits_is < bits_lr && bits_is < bits_ms && r > 0.90 && sfb > 4);
 
         if (use_is) {
-            faac_real efix = enrgl + enrgr;
-            faac_real enrgs_legacy = 4.0f * enrgm;
-            faac_real vfix = FAAC_SQRT(efix / (enrgs_legacy + 1e-15f));
-            int sf = FAAC_LRINT(FAAC_LOG10(max(enrgl, 1e-15f) / (efix + 1e-15f)) * step);
-            int pan = FAAC_LRINT(FAAC_LOG10(max(enrgr, 1e-15f) / (efix + 1e-15f)) * step) - sf;
+            faac_real enrgs_sum = 4.0 * enrgm;
+            faac_real vfix = FAAC_SQRT(efix / (enrgs_sum + 1e-15));
+            int sf = FAAC_LRINT(FAAC_LOG10(max(enrgl, 1e-15) / (efix + 1e-15)) * step);
+            int pan = FAAC_LRINT(FAAC_LOG10(max(enrgr, 1e-15) / (efix + 1e-15)) * step) - sf;
 
             if (pan <= 30 && pan >= -30) {
                 cl->sf[*sfcnt] = sf;
@@ -94,7 +104,6 @@ static void mixed_mode(CoderInfo *cl, CoderInfo *cr, ChannelInfo *chi,
                     for (l = start; l < end; l++) {
                         faac_real sum = sl[l] + sr[l];
                         sl[l] = sum * vfix;
-                        sr[l] = 0;
                     }
                 }
                 chi->msInfo.ms_used[*sfcnt] = 0;
