@@ -18,6 +18,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ****************************************************************************/
 
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -56,6 +57,11 @@ static void quantize_scalar(const faac_real * __restrict xr, int * __restrict xi
 }
 
 static QuantizeFunc qfunc = quantize_scalar;
+static faac_real sfstep;
+static faac_real max_quant_limit;
+
+/* Sentinel: delta chain has no previous band yet (first active regular band). */
+#define SF_CHAIN_UNSET INT_MIN
 
 void QuantizeInit(void)
 {
@@ -66,12 +72,34 @@ void QuantizeInit(void)
     else
 #endif
         qfunc = quantize_scalar;
+
+    /* 2^0.25 (1.50515 dB) step from AAC specs */
+    sfstep = 1.0 / FAAC_LOG10(FAAC_SQRT(FAAC_SQRT(2.0)));
+
+    /* Inverse-quantizer headroom: ensures (x * gain)^0.75 + 0.4054 <= 8191.
+     * Pre-calculated to avoid redundant runtime power functions. */
+    max_quant_limit = FAAC_POW((faac_real)MAX_HUFF_ESC_VAL + 1.0 - MAGIC_NUMBER, 4.0/3.0);
 }
+
+/* Compute gain from integer sfac, clamping against Huffman overflow.
+ * Updates *sfac if clamping was applied. Returns the usable gain. */
+static faac_real gain_with_overflow_clamp(int *sfac, faac_real band_peak)
+{
+    faac_real gain = FAAC_POW(10, *sfac / sfstep);
+    if (band_peak > 0.0 && gain * band_peak > max_quant_limit)
+    {
+        gain = max_quant_limit / band_peak;
+        *sfac = (int)FAAC_FLOOR(FAAC_LOG10(gain) * sfstep);
+        gain = FAAC_POW(10, *sfac / sfstep);
+    }
+    return gain;
+}
+
 #define NOISEFLOOR 0.4
 
 // band sound masking
 static void bmask(CoderInfo * __restrict coderInfo, faac_real * __restrict xr0, faac_real * __restrict bandqual,
-                  faac_real * __restrict bandenrg, int gnum, faac_real quality)
+                  faac_real * __restrict bandenrg, faac_real * __restrict bandmaxe, int gnum, faac_real quality)
 {
   int sfb, start, end, cnt;
   int *cb_offset = coderInfo->sfb_offset;
@@ -130,6 +158,8 @@ static void bmask(CoderInfo * __restrict coderInfo, faac_real * __restrict xr0, 
         }
     }
     bandenrg[sfb] = avge;
+    /* Track peak magnitude to identify potential Huffman overflows. */
+    bandmaxe[sfb] = FAAC_SQRT(maxe);
     maxe *= gsize;
 
 #define NOISETONE 0.2
@@ -166,24 +196,21 @@ static void qlevel(CoderInfo * __restrict coderInfo,
                    const faac_real * __restrict xr0,
                    const faac_real * __restrict bandqual,
                    const faac_real * __restrict bandenrg,
+                   const faac_real * __restrict bandmaxe,
                    int gnum,
-                   int pnslevel
+                   int pnslevel,
+                   int *p_last_abs  /* previous active band's absolute stored scalefactor */
                   )
 {
     int sb;
-#if !defined(__clang__) && defined(__GNUC__) && (GCC_VERSION >= 40600)
-    /* 2^0.25 (1.50515 dB) step from AAC specs */
-    static const faac_real sfstep = 1.0 / FAAC_LOG10(FAAC_SQRT(FAAC_SQRT(2.0)));
-#else
-    static const faac_real sfstep = 20 / 1.50515;
-#endif
     int gsize = coderInfo->groups.len[gnum];
     faac_real pnsthr = 0.1 * pnslevel;
 
-    for (sb = 0; sb < coderInfo->sfbn; sb++)
+    for (sb = 0; sb < coderInfo->sfbn && coderInfo->bandcnt < MAX_SCFAC_BANDS; sb++)
     {
       faac_real sfacfix;
       int sfac;
+      int sf_rel;   /* relative scalefactor index: SF_OFFSET - sfac */
       faac_real rmsx;
       faac_real etot;
       int xitab[8 * MAXSHORTBAND];
@@ -220,10 +247,52 @@ static void qlevel(CoderInfo * __restrict coderInfo,
       }
 
       sfac = FAAC_LRINT(FAAC_LOG10(bandqual[sb] / rmsx) * sfstep);
-      if ((SF_OFFSET - sfac) < 10)
+      sf_rel = SF_OFFSET - sfac;
+
+      /* sf_bias: IS intensity stereo energy offset pre-loaded into sf[] by
+       * AACstereo() before qlevel() runs; zero for regular bands.
+       * sf_abs = sf_bias + sf_rel is the value written to the bitstream.
+       * Delta chain comparisons must use sf_abs, not sf_rel alone. */
+      int sf_bias = coderInfo->sf[coderInfo->bandcnt];
+      int sf_abs  = sf_bias + sf_rel;
+
+      if (sf_rel < SF_MIN)
+      {
           sfacfix = 0.0;
+      }
       else
-          sfacfix = FAAC_POW(10, sfac / sfstep);
+      {
+          /* Compute gain and clamp against Huffman overflow. */
+          sfacfix = gain_with_overflow_clamp(&sfac, bandmaxe[sb]);
+          sf_rel = SF_OFFSET - sfac;
+          sf_abs = sf_bias + sf_rel;
+
+          /* Pre-clamp: enforce delta limits against the previous band's stored
+           * value so encoder and decoder use the same gain (sf_abs). */
+          if (*p_last_abs != SF_CHAIN_UNSET)
+          {
+              int diff         = sf_abs - *p_last_abs;
+              int clamped_diff = clamp_sf_diff(diff);
+              if (clamped_diff != diff)
+              {
+                  sf_abs = *p_last_abs + clamped_diff;
+                  sf_rel = sf_abs - sf_bias;
+                  sfac   = SF_OFFSET - sf_rel;
+                  if (clamped_diff > 0)
+                  {
+                      /* Upward clamp raised gain; re-check Huffman overflow. */
+                      sfacfix = gain_with_overflow_clamp(&sfac, bandmaxe[sb]);
+                      sf_rel = SF_OFFSET - sfac;
+                      sf_abs = sf_bias + sf_rel;
+                  }
+                  else
+                  {
+                      /* Downward clamp lowered gain; overflow impossible. */
+                      sfacfix = FAAC_POW(10, sfac / sfstep);
+                  }
+              }
+          }
+      }
 
       end -= start;
       xi = xitab;
@@ -241,7 +310,11 @@ static void qlevel(CoderInfo * __restrict coderInfo,
           }
       }
       huffbook(coderInfo, xitab, gsize * end);
-      coderInfo->sf[coderInfo->bandcnt++] += SF_OFFSET - sfac;
+      /* Track sf_abs (full bitstream value) for the next band's delta check.
+       * HCB_ZERO bands don't participate in the regular-band delta chain. */
+      if (coderInfo->book[coderInfo->bandcnt] != HCB_ZERO)
+          *p_last_abs = sf_abs;
+      coderInfo->sf[coderInfo->bandcnt++] += sf_rel;
     }
 }
 
@@ -249,6 +322,7 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
 {
     faac_real bandlvl[MAX_SCFAC_BANDS];
     faac_real bandenrg[MAX_SCFAC_BANDS];
+    faac_real bandmaxe[MAX_SCFAC_BANDS];
     int cnt;
     faac_real *gxr;
 
@@ -257,66 +331,52 @@ int BlocQuant(CoderInfo * __restrict coder, faac_real * __restrict xr, AACQuantC
     coder->bandcnt = 0;
     coder->datacnt = 0;
 
+    int lastsf = SF_CHAIN_UNSET;  /* no previous band yet; first active band skips delta clamp */
+
+    gxr = xr;
+    for (cnt = 0; cnt < coder->groups.n; cnt++)
     {
-        int lastis;
-        int lastsf;
-
-        gxr = xr;
-        for (cnt = 0; cnt < coder->groups.n; cnt++)
-        {
-            bmask(coder, gxr, bandlvl, bandenrg, cnt,
-                  (faac_real)aacquantCfg->quality/DEFQUAL);
-            qlevel(coder, gxr, bandlvl, bandenrg, cnt, aacquantCfg->pnslevel);
-            gxr += coder->groups.len[cnt] * BLOCK_LEN_SHORT;
-        }
-
-        coder->global_gain = 0;
-        for (cnt = 0; cnt < coder->bandcnt; cnt++)
-        {
-            int book = coder->book[cnt];
-            if (!book)
-                continue;
-            if ((book != HCB_INTENSITY) && (book != HCB_INTENSITY2))
-            {
-                coder->global_gain = coder->sf[cnt];
-                break;
-            }
-        }
-
-        lastsf = coder->global_gain;
-        lastis = 0;
-        // fixme: move SF range check to quantizer
-        for (cnt = 0; cnt < coder->bandcnt; cnt++)
-        {
-            int book = coder->book[cnt];
-            if ((book == HCB_INTENSITY) || (book == HCB_INTENSITY2))
-            {
-                int diff = coder->sf[cnt] - lastis;
-
-                if (diff < -60)
-                    diff = -60;
-                if (diff > 60)
-                    diff = 60;
-
-                lastis += diff;
-                coder->sf[cnt] = lastis;
-            }
-            else if (book == HCB_ESC)
-            {
-                int diff = coder->sf[cnt] - lastsf;
-
-                if (diff < -60)
-                    diff = -60;
-                if (diff > 60)
-                    diff = 60;
-
-                lastsf += diff;
-                coder->sf[cnt] = lastsf;
-            }
-        }
-        return 1;
+        bmask(coder, gxr, bandlvl, bandenrg, bandmaxe, cnt,
+              (faac_real)aacquantCfg->quality/DEFQUAL);
+        qlevel(coder, gxr, bandlvl, bandenrg, bandmaxe, cnt,
+               aacquantCfg->pnslevel, &lastsf);
+        gxr += coder->groups.len[cnt] * BLOCK_LEN_SHORT;
     }
-    return 0;
+
+    coder->global_gain = 0;
+    for (cnt = 0; cnt < coder->bandcnt; cnt++)
+    {
+        int book = coder->book[cnt];
+        if (!book)
+            continue;
+        if ((book != HCB_INTENSITY) && (book != HCB_INTENSITY2))
+        {
+            coder->global_gain = coder->sf[cnt];
+            break;
+        }
+    }
+
+    int lastis  = 0;
+    int lastpns = coder->global_gain - SF_PNS_OFFSET;
+    for (cnt = 0; cnt < coder->bandcnt; cnt++)
+    {
+        int book = coder->book[cnt];
+        if ((book == HCB_INTENSITY) || (book == HCB_INTENSITY2))
+        {
+            int diff = coder->sf[cnt] - lastis;
+            diff = clamp_sf_diff(diff);
+            lastis += diff;
+            coder->sf[cnt] = lastis;
+        }
+        else if (book == HCB_PNS)
+        {
+            int diff = coder->sf[cnt] - lastpns;
+            diff = clamp_sf_diff(diff);
+            lastpns += diff;
+            coder->sf[cnt] = lastpns;
+        }
+    }
+    return 1;
 }
 
 void CalcBW(unsigned *bw, int rate, SR_INFO *sr, AACQuantCfg *aacquantCfg)
