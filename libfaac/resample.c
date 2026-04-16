@@ -79,24 +79,15 @@ int Resample2to1(Resampler *r,
         faac_real *out = output[ch];
         faac_real *hist = r->buf[ch];  /* RESAMPLE_FILTER_LEN history samples */
 
+        faac_real temp[RESAMPLE_FILTER_LEN + 2 * FRAME_LEN];
+        memcpy(temp, hist, (RESAMPLE_FILTER_LEN - 1) * sizeof(faac_real));
+        memcpy(temp + (RESAMPLE_FILTER_LEN - 1), in, input_len * sizeof(faac_real));
+        const int center = (RESAMPLE_FILTER_LEN - 1) / 2;
         for (int i = 0; i < output_len; i++) {
-            /* Full-rate index of the output sample centre: 2*i */
-            faac_real sum = (faac_real)0;
-            for (int j = 0; j < RESAMPLE_FILTER_LEN; j++) {
-                int idx = 2 * i - j;
-                faac_real val;
-                if (idx >= 0) {
-                    val = in[idx];
-                } else {
-                    /* Look into history ring (idx is negative).
-                     * Map idx == -(RESAMPLE_FILTER_LEN - 1) -> hist[0]
-                     * and idx == -1 -> hist[RESAMPLE_FILTER_LEN - 2].
-                     */
-                    int hidx = RESAMPLE_FILTER_LEN - 1 + idx;
-                    val = (hidx >= 0) ? hist[hidx] : (faac_real)0;
-                }
-                sum += val * fir_coeffs[j];
-            }
+            const faac_real *p = &temp[2 * i];
+            faac_real sum = p[center] * fir_coeffs[center];
+            for (int j = 0; j < center; j++)
+                sum += (p[j] + p[RESAMPLE_FILTER_LEN - 1 - j]) * fir_coeffs[j];
             out[i] = sum;
         }
 

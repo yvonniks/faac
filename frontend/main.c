@@ -431,7 +431,7 @@ int main(int argc, char *argv[])
 
     faacEncConfigurationPtr myFormat;
     unsigned int mpegVersion = MPEG4;
-    unsigned int objectType = LOW;
+    unsigned int objectType = HE_AAC;
     int jointmode = -1;
     int pnslevel = -1;
     static int useTns = 0;
