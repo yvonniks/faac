@@ -831,6 +831,8 @@ int PutBit(BitStream *bitStream,
     bitStream->numBit = bitStream->currentBit;
     if (numBit < 32)
         data &= (1UL << numBit) - 1;
+    else if (numBit == 32)
+        data &= 0xFFFFFFFFUL;
     if (bitOffset + numBit <= 8) {
         int shift = 8 - bitOffset - numBit;
         if (bitOffset == 0) *ptr = (unsigned char)(data << shift);

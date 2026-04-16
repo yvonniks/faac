@@ -254,12 +254,17 @@ static void qmf_analysis_slot(const SBRInfo *sbr,
      * phase = pi*(2k+1)*(2n-63)/128
      *
      * Precomputed tables for cos/sin are used to avoid expensive runtime math. */
+    faac_real hv[SBR_QMF_FILTER_LEN];
+    for (int n = 0; n < SBR_QMF_FILTER_LEN; n++) {
+        hv[n] = h_sbr_qmf[n] * ovl[SBR_QMF_FILTER_LEN - 1 - n];
+    }
     for (int k = 0; k < SBR_QMF_BANDS; k++) {
         faac_real re = 0, im = 0;
+        const faac_real *c_ptr = sbr->cos_table[k];
+        const faac_real *s_ptr = sbr->sin_table[k];
         for (int n = 0; n < SBR_QMF_FILTER_LEN; n++) {
-            faac_real hv = h_sbr_qmf[n] * ovl[SBR_QMF_FILTER_LEN - 1 - n];
-            re += hv * sbr->cos_table[k][n];
-            im += hv * sbr->sin_table[k][n];
+            re += hv[n] * c_ptr[n];
+            im += hv[n] * s_ptr[n];
         }
         energy[k] = re * re + im * im;
     }
