@@ -85,11 +85,9 @@ int Resample2to1(Resampler *r,
         const int center = (RESAMPLE_FILTER_LEN - 1) / 2;
         for (int i = 0; i < output_len; i++) {
             const faac_real *p = &temp[2 * i];
-            /* Symmetry: h[j] == h[RESAMPLE_FILTER_LEN-1-j] */
             faac_real sum = p[center] * fir_coeffs[center];
-            for (int j = 0; j < center; j++) {
+            for (int j = 0; j < center; j++)
                 sum += (p[j] + p[RESAMPLE_FILTER_LEN - 1 - j]) * fir_coeffs[j];
-            }
             out[i] = sum;
         }
 

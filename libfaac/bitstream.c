@@ -822,39 +822,25 @@ int PutBit(BitStream *bitStream,
            unsigned long data,
            int numBit)
 {
-    if (numBit <= 0)
-        return 0;
-
+    if (numBit <= 0) return 0;
     unsigned int currentBit = (unsigned int)bitStream->currentBit;
     unsigned int bitOffset = currentBit & 7;
     unsigned char *ptr = bitStream->data + (currentBit >> 3);
-
     bitStream->currentBit += numBit;
     bitStream->numBit = bitStream->currentBit;
-
-    if (numBit < 32)
-        data &= (1UL << numBit) - 1;
-    else if (numBit == 32)
-        data &= 0xFFFFFFFFUL;
-
+    if (numBit < 32) data &= (1UL << numBit) - 1;
+    else if (numBit == 32) data &= 0xFFFFFFFFUL;
     if (bitOffset + numBit <= 8) {
         int shift = 8 - bitOffset - numBit;
         if (bitOffset == 0) *ptr = (unsigned char)(data << shift);
         else *ptr |= (unsigned char)(data << shift);
     } else {
-        int bits_to_write = numBit;
-        int first_byte_space = 8 - bitOffset;
+        int bits_to_write = numBit, first_byte_space = 8 - bitOffset;
         if (bitOffset == 0) *ptr = (unsigned char)(data >> (bits_to_write - first_byte_space));
         else *ptr |= (unsigned char)(data >> (bits_to_write - first_byte_space));
-        ptr++;
-        bits_to_write -= first_byte_space;
-        while (bits_to_write >= 8) {
-            bits_to_write -= 8;
-            *ptr++ = (unsigned char)((data >> bits_to_write) & 0xFF);
-        }
-        if (bits_to_write > 0) {
-            *ptr = (unsigned char)((data & ((1UL << bits_to_write) - 1)) << (8 - bits_to_write));
-        }
+        ptr++; bits_to_write -= first_byte_space;
+        while (bits_to_write >= 8) { bits_to_write -= 8; *ptr++ = (unsigned char)((data >> bits_to_write) & 0xFF); }
+        if (bits_to_write > 0) *ptr = (unsigned char)((data & ((1UL << bits_to_write) - 1)) << (8 - bits_to_write));
     }
     return 0;
 }

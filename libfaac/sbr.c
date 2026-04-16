@@ -190,17 +190,11 @@ SBRInfo *SBRInit(int channels, int sampleRate, int coreSampleRate)
      * bs_stop_freq=7 is safe for all rates: worst-case k2-kx=41 ≤ 48.
      * Higher values (e.g. 8) are better quality but rate-dependent. */
     sbr->bs_amp_res    = 0;   /* 1.5 dB amplitude resolution */
-
-    /* Search for bs_start_freq to match kx ≈ 16 (Fs/4 crossover) */
-    int min_diff = 1000;
-    int best_start = 15;
+    int min_diff = 1000, best_start = 15;
     for (int i = 0; i < 16; i++) {
         int kx = compute_kx(sampleRate, i);
-        int diff = abs(kx - 16);
-        if (diff < min_diff) {
-            min_diff = diff;
-            best_start = i;
-        }
+        int diff = abs(kx - 32);
+        if (diff < min_diff) { min_diff = diff; best_start = i; }
     }
     sbr->bs_start_freq = best_start;
     sbr->bs_stop_freq  = 14;  /* k2 = 2*kx — full upper-octave SBR extension */
@@ -267,13 +261,11 @@ static void qmf_analysis_slot(const SBRInfo *sbr,
      *
      * Precomputed tables for cos/sin are used to avoid expensive runtime math. */
     faac_real hv[SBR_QMF_FILTER_LEN];
-    for (int n = 0; n < SBR_QMF_FILTER_LEN; n++) {
+    for (int n = 0; n < SBR_QMF_FILTER_LEN; n++)
         hv[n] = h_sbr_qmf[n] * ovl[SBR_QMF_FILTER_LEN - 1 - n];
-    }
     for (int k = 0; k < SBR_QMF_BANDS; k++) {
         faac_real re = 0, im = 0;
-        const faac_real *c_ptr = sbr->cos_table[k];
-        const faac_real *s_ptr = sbr->sin_table[k];
+        const faac_real *c_ptr = sbr->cos_table[k], *s_ptr = sbr->sin_table[k];
         for (int n = 0; n < SBR_QMF_FILTER_LEN; n++) {
             re += hv[n] * c_ptr[n];
             im += hv[n] * s_ptr[n];
