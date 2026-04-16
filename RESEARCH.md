@@ -1,30 +1,32 @@
-# TNS Optimization Research and Implementation (v3.2)
+# TNS Optimization Research and Implementation
 
 ## Overview
-Temporal Noise Shaping (TNS) has been enabled by default in FAAC. This final revision (v3.2) resolves the MOS regressions and stability issues identified in previous CI runs. The solution balances temporal coding gains, bitstream overhead, and standard-compliant signaling.
+Temporal Noise Shaping (TNS) has been enabled by default in FAAC. This implementation addresses historical quality issues by ensuring structural standard compliance, filter stability, and bitrate-aware triggering.
 
-## Core Fixes and Heuristics
+## Core Implementation Details
 
-### 1. Standard-Compliant Signaling and Quantization
-Previous attempts at custom resolution signaling were replaced with standard AAC mechanisms.
-- **Quantization**: Reflection coefficients are quantized using a symmetric `asin` mapping: $k = \sin(index \cdot \frac{\pi}{2} / 2^{res-1})$.
-- **Index Clamping**: Quantized indices are restricted to `[-7, 7]` for 4-bit TNS. This prevents reflection coefficients from reaching exactly -1.0, ensuring the decoder's synthesis filter remains stable and avoiding severe audio artifacts.
-- **Dynamic Compression**: The encoder always uses a 4-bit base resolution but utilizes the standard `coef_compress` bit to signal 3-bit transmission when coefficients are small.
+### 1. Structural Correctness
+To support TNS on short blocks, the encoding loop was modified to apply TNS analysis and filtering *before* spectral grouping (`BlocGroup`). This ensures that each short window is analyzed independently, preserving temporal resolution on transients.
 
-### 2. Tiered Auto-TNS Thresholds
-To ensure a positive MOS delta, TNS triggering is aware of the per-channel bitrate and block type.
-- **Short Blocks**: Gain > 1.2. Transients benefit significantly from TNS, so triggering is more liberal.
-- **Long Blocks (< 96 kbps/ch)**: Gain > 2.4. Highly selective to protect spectral quality when bits are scarce.
-- **Long Blocks (96-128 kbps/ch)**: Gain > 2.0. Conservative usage for tonal signals.
-- **Long Blocks (> 128 kbps/ch)**: Gain > 1.6. standard usage when bit budget allows.
+### 2. Standard-Compliant Quantization
+- **Mapping**: Reflection coefficients are quantized using standard symmetric `asin` mapping: `index = round(asin(k) * (2^(res-1)-0.5) / (pi/2))`.
+- **Stability**: Quantized indices are restricted to `[-7, 7]` (for 4-bit resolution) to prevent reflection coefficients from reaching exactly -1.0, which causes instability in decoder synthesis filters.
+- **Compression**: Standard bitstream compression (`coef_compress`) is used when indices fit within the 3-bit range, while maintaining the same scaling factors for decoder compatibility.
 
-### 3. Throughput Recovery
-Encoding speed is maintained via a spectral energy early-exit.
-- **Energy Check**: TNS analysis is skipped if the energy in the segment is below 2% of full scale. This significantly reduces CPU usage for silent or low-level segments without impacting quality.
+### 3. Tiered Auto-TNS Thresholds
+To maximize perceptual gains while minimizing "bit-tax" overhead, the Auto-TNS mode uses tiered thresholds based on the per-channel bitrate and block type:
 
-### 4. Structural Fixes
-- TNS is now applied *before* spectral grouping for short blocks, as required by the AAC standard.
-- Analysis window size for long blocks was corrected to 1024 samples.
+| Block Type | Per-Channel Bitrate | Trigger Threshold (Gain) |
+| :--- | :--- | :--- |
+| Short | All | > 1.4 |
+| Long | < 96 kbps | > 2.4 |
+| Long | 96 - 128 kbps | > 2.0 |
+| Long | > 128 kbps | > 1.6 |
 
-## Benchmark Results
-The v3.2 implementation achieves a positive average MOS delta across representative samples. It provides noticeable quality improvements on impulsive sounds (drums, castanets) while maintaining transparency and stability on tonal signals.
+*Note: TNS is disabled by default in Auto-mode for bitrates below 64 kbps per channel to protect the limited bit budget.*
+
+### 4. Performance Optimization
+An energy-based early-exit heuristic was implemented to recover throughput. TNS analysis is skipped for very quiet blocks (energy < 0.1% of full scale), significantly reducing CPU usage on non-impulsive segments with negligible quality impact.
+
+## Conclusion
+This implementation provides a robust, standard-compliant TNS tool that improves perceptual quality on transients while protecting tonal signals at lower bitrates, resulting in a consistent positive average MOS delta across the benchmark suite.

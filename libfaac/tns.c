@@ -42,9 +42,9 @@ Copyright (c) 1997.
 #define TNS_BR_HIGH       128
 
 /* Auto-mode thresholds */
-#define TNS_GAIN_AUTO_SHORT  1.2
+#define TNS_GAIN_AUTO_SHORT  1.1
 #define TNS_GAIN_AUTO_LONG   2.0
-#define TNS_GAIN_AUTO_HIGH   1.6
+#define TNS_GAIN_AUTO_HIGH   1.4
 #define TNS_GAIN_INITIAL     1.4
 
 /***********************************************/
@@ -154,22 +154,16 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
         numberOfWindows = MAX_SHORT_WINDOWS;
         windowSize = BLOCK_LEN_SHORT;
         startBand = tnsInfo->tnsMinBandNumberShort;
-        stopBand = numberOfBands;
-
+        stopBand = numberOfBands; // Align with max_sfb
         order = tnsInfo->tnsMaxOrderShort;
-        startBand = min(startBand,tnsInfo->tnsMaxBandsShort);
-        stopBand = min(stopBand,tnsInfo->tnsMaxBandsShort);
         break;
 
     default:
         numberOfWindows = 1;
         windowSize = BLOCK_LEN_LONG;
         startBand = tnsInfo->tnsMinBandNumberLong;
-        stopBand = numberOfBands;
-
+        stopBand = numberOfBands; // Align with max_sfb
         order = tnsInfo->tnsMaxOrderLong;
-        startBand = min(startBand,tnsInfo->tnsMaxBandsLong);
-        stopBand = min(stopBand,tnsInfo->tnsMaxBandsLong);
         break;
     }
 
@@ -203,13 +197,13 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
 
         if (length <= 0) continue;
 
-        /* Energy early-exit: skip very quiet blocks to save CPU */
+        /* Energy early-exit: skip quiet blocks to save CPU */
         faac_real energy = 0.0;
         for (i = 0; i < length; i++) {
             faac_real s = spec[startIndex + i];
             energy += s * s;
         }
-        if (energy < (faac_real)length * 0.02) continue;
+        if (energy < (faac_real)length * 0.005) continue;
 
         gain = LevinsonDurbin(order,length,&spec[startIndex],k);
 
@@ -239,13 +233,16 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
                 int can_compress = 1;
 
                 for (i=1; i<=truncatedOrder; i++) {
+                    /* Clamp k to avoid stability issues */
                     if (k[i] > 0.99) k[i] = 0.99;
                     if (k[i] < -0.99) k[i] = -0.99;
                     k_quant[i] = k[i];
                 }
 
+                /* Standard 4-bit quantization mapping */
                 QuantizeReflectionCoeffs(truncatedOrder, 4, k_quant, index_quant);
 
+                /* Check if indices fit in 3 bits with 4-bit scaling */
                 for (i=1; i<=truncatedOrder; i++) {
                     if (index_quant[i] < -4 || index_quant[i] > 3) {
                         can_compress = 0;
@@ -253,6 +250,8 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
                     }
                 }
 
+                /* To be perfectly clear to decoders, if we want to signal 3-bit scaling,
+                   we should use the 3-bit scaling factor. */
                 if (can_compress) {
                     QuantizeReflectionCoeffs(truncatedOrder, 3, k_quant, index_quant);
                 }
@@ -308,8 +307,6 @@ void TnsEncodeFilterOnly(TnsInfo* tnsInfo,           /* TNS info */
         windowSize = BLOCK_LEN_SHORT;
         startBand = tnsInfo->tnsMinBandNumberShort;
         stopBand = numberOfBands;
-        startBand = min(startBand,tnsInfo->tnsMaxBandsShort);
-        stopBand = min(stopBand,tnsInfo->tnsMaxBandsShort);
         break;
 
     default:
@@ -317,8 +314,6 @@ void TnsEncodeFilterOnly(TnsInfo* tnsInfo,           /* TNS info */
         windowSize = BLOCK_LEN_LONG;
         startBand = tnsInfo->tnsMinBandNumberLong;
         stopBand = numberOfBands;
-        startBand = min(startBand,tnsInfo->tnsMaxBandsLong);
-        stopBand = min(stopBand,tnsInfo->tnsMaxBandsLong);
         break;
     }
 
@@ -411,24 +406,24 @@ static int TruncateCoeffs(int fOrder,faac_real threshold,faac_real* kArray)
 /*****************************************************/
 static void QuantizeReflectionCoeffs(int fOrder,
                               int coeffRes,
-                              faac_real* kArray,
+                              faac_real* rArray,
                               int* indexArray)
 {
     int i;
     /* Standard symmetric mapping: fac = 2^(res-1) / (pi/2) */
     faac_real fac = (faac_real)(1 << (coeffRes - 1)) / (M_PI / 2.0);
-    int low = -(1 << (coeffRes - 1)) + 1; /* Avoid -1.0 for stability */
+    int low = -(1 << (coeffRes - 1)) + 1; /* restricted range for stability */
     int high = (1 << (coeffRes - 1)) - 1;
 
     for (i=1;i<=fOrder;i++) {
-        faac_real val = kArray[i];
+        faac_real val = rArray[i];
         if (val > 0.99) val = 0.99;
         if (val < -0.99) val = -0.99;
         val = FAAC_ASIN(val);
         indexArray[i] = FAAC_LRINT(val * fac);
         if (indexArray[i] < low) indexArray[i] = low;
         if (indexArray[i] > high) indexArray[i] = high;
-        kArray[i] = FAAC_SIN((faac_real)indexArray[i] / fac);
+        rArray[i] = FAAC_SIN((faac_real)indexArray[i] / fac);
     }
 }
 
