@@ -189,7 +189,7 @@ static help_t help_mp4[] = {
 };
 
 static help_t help_advanced[] = {
-    {"--tns  \tEnable coding of TNS, temporal noise shaping.\n"},
+    {"--tns\t\tForce use of TNS, temporal noise shaping.\n"},
     {"--no-tns\tDisable coding of TNS, temporal noise shaping.\n"},
     {"--joint 0\tDisable joint stereo coding.\n"},
     {"--joint 1\tUse Mid/Side coding.\n"},
@@ -434,7 +434,7 @@ int main(int argc, char *argv[])
     unsigned int objectType = LOW;
     int jointmode = -1;
     int pnslevel = -1;
-    static int useTns = 0;
+    static int useTns = -1;
     enum container_format container = NO_CONTAINER;
     enum stream_format stream = ADTS_STREAM;
     int cutOff = -1;
@@ -561,7 +561,7 @@ int main(int argc, char *argv[])
         int c = -1;
         int option_index = 0;
 
-        c = getopt_long(argc, argv, "Hhb:m:o:rnc:q:PR:B:C:I:Xwv:",
+        c = getopt_long(argc, argv, "Hhb:m:o:rc:q:PR:B:C:I:Xwv:",
                         long_options, &option_index);
 
         if (c == -1)
@@ -592,6 +592,26 @@ int main(int argc, char *argv[])
                 if (sscanf(optarg, "%u", &i) > 0)
                 {
                     cutOff = i;
+                }
+                break;
+            }
+        case 'm':
+            {
+                unsigned int i;
+                if (sscanf(optarg, "%u", &i) > 0)
+                {
+                    mpegVersion = i;
+                    switch (mpegVersion)
+                    {
+                    case 2:
+                        mpegVersion = MPEG2;
+                        break;
+                    case 4:
+                        mpegVersion = MPEG4;
+                        break;
+                    default:
+                        dieMessage = "Unrecognised MPEG version!\n";
+                    }
                 }
                 break;
             }
@@ -1026,8 +1046,11 @@ int main(int argc, char *argv[])
         break;
     }
     fprintf(stderr, " (MPEG-%d)", (mpegVersion == MPEG4) ? 4 : 2);
-    if (myFormat->useTns)
+    if (myFormat->useTns == 1) {
         fprintf(stderr, " + TNS");
+    } else if (myFormat->useTns == -1) {
+        fprintf(stderr, " + TNS(auto)");
+    }
 
     switch(myFormat->jointmode) {
     case JOINT_MS:

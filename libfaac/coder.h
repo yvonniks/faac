@@ -76,6 +76,8 @@ typedef struct {
     int tnsMaxBandsShort;
     int tnsMaxOrderLong;
     int tnsMaxOrderShort;
+    int bitRate;
+    int useTns;
     TnsWindowData windowData[MAX_SHORT_WINDOWS]; /* TNS data per window */
 } TnsInfo;
 
