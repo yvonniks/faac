@@ -23,6 +23,113 @@
 #include "stereo.h"
 #include "huff2.h"
 
+static inline faac_real fast_log2(faac_real x)
+{
+#ifdef FAAC_PRECISION_DOUBLE
+    return FAAC_LOG10(x) * 3.32192809488736234787;
+#else
+    union { float f; unsigned int i; } vx;
+    vx.f = (float)x;
+    return (faac_real)(vx.i * 1.1920928955078125e-7f - 126.94269504f);
+#endif
+}
+
+static void mixed_mode(CoderInfo *cl, CoderInfo *cr, ChannelInfo *chi,
+                       faac_real *sl0, faac_real *sr0, int *sfcnt,
+                       int wstart, int wend, faac_real quality)
+{
+    int sfb;
+    int win;
+    int sfmin = (cl->block_type == ONLY_SHORT_WINDOW) ? 1 : 8;
+    const faac_real step = 10/1.50515;
+
+    for (sfb = 0; sfb < sfmin; sfb++) {
+        chi->msInfo.ms_used[*sfcnt] = 0;
+        (*sfcnt)++;
+    }
+
+    for (sfb = sfmin; sfb < cl->sfbn; sfb++) {
+        int l, start, end;
+        faac_real enrgl = 0, enrgr = 0, correl = 0;
+        start = cl->sfb_offset[sfb];
+        end = cl->sfb_offset[sfb + 1];
+        int len = end - start;
+
+        for (win = wstart; win < wend; win++) {
+            faac_real *sl = sl0 + win * BLOCK_LEN_SHORT;
+            faac_real *sr = sr0 + win * BLOCK_LEN_SHORT;
+            for (l = start; l < end; l++) {
+                faac_real lx = sl[l];
+                faac_real rx = sr[l];
+                enrgl += lx * lx;
+                enrgr += rx * rx;
+                correl += lx * rx;
+            }
+        }
+
+        faac_real enrgm = 0.25 * (enrgl + enrgr + 2.0 * correl);
+        faac_real enrgs = 0.25 * (enrgl + enrgr - 2.0 * correl);
+        faac_real efix = enrgl + enrgr;
+
+        faac_real bits_lr = 0.5 * (faac_real)len * (fast_log2(enrgl/(faac_real)len + 1.0) + fast_log2(enrgr/(faac_real)len + 1.0));
+        faac_real bits_ms = 0.5 * (faac_real)len * (fast_log2(enrgm/(faac_real)len + 1.0) + fast_log2(enrgs/(faac_real)len + 1.0));
+        /* IS bit cost uses the normalized sum signal energy (efix) and includes parameter overhead. */
+        faac_real bits_is = 0.5 * (faac_real)len * fast_log2(efix/(faac_real)len + 1.0) + 5.0;
+
+        faac_real r = 0;
+        if (enrgl > 1e-15 && enrgr > 1e-15)
+            r = correl / FAAC_SQRT(enrgl * enrgr);
+
+        faac_real is_penalty = 1.10;
+        if (cl->block_type == ONLY_SHORT_WINDOW) is_penalty *= 1.15;
+        if (quality > 1.0) is_penalty *= 1.10;
+        bits_is *= is_penalty;
+
+        int use_ms = (bits_ms < bits_lr);
+        int use_is = (bits_is < bits_lr && bits_is < bits_ms && r > 0.90 && sfb > 4);
+
+        if (use_is) {
+            faac_real enrgs_sum = 4.0 * enrgm;
+            faac_real vfix = FAAC_SQRT(efix / (enrgs_sum + 1e-15));
+            int sf = FAAC_LRINT(FAAC_LOG10(max(enrgl, 1e-15) / (efix + 1e-15)) * step);
+            int pan = FAAC_LRINT(FAAC_LOG10(max(enrgr, 1e-15) / (efix + 1e-15)) * step) - sf;
+
+            if (pan <= 30 && pan >= -30) {
+                cl->sf[*sfcnt] = sf;
+                cr->sf[*sfcnt] = -pan;
+                cr->book[*sfcnt] = HCB_INTENSITY;
+                for (win = wstart; win < wend; win++) {
+                    faac_real *sl = sl0 + win * BLOCK_LEN_SHORT;
+                    faac_real *sr = sr0 + win * BLOCK_LEN_SHORT;
+                    for (l = start; l < end; l++) {
+                        faac_real sum = sl[l] + sr[l];
+                        sl[l] = sum * vfix;
+                    }
+                }
+                chi->msInfo.ms_used[*sfcnt] = 0;
+            } else {
+                use_is = 0;
+            }
+        }
+
+        if (!use_is && use_ms) {
+            chi->msInfo.ms_used[*sfcnt] = 1;
+            for (win = wstart; win < wend; win++) {
+                faac_real *sl = sl0 + win * BLOCK_LEN_SHORT;
+                faac_real *sr = sr0 + win * BLOCK_LEN_SHORT;
+                for (l = start; l < end; l++) {
+                    faac_real lx = sl[l];
+                    faac_real rx = sr[l];
+                    sl[l] = 0.5f * (lx + rx);
+                    sr[l] = 0.5f * (lx - rx);
+                }
+            }
+        } else if (!use_is) {
+            chi->msInfo.ms_used[*sfcnt] = 0;
+        }
+        (*sfcnt)++;
+    }
+}
 
 static void stereo(CoderInfo *cl, CoderInfo *cr,
                    faac_real *sl0, faac_real *sr0, int *sfcnt,
@@ -363,7 +470,7 @@ void AACstereo(CoderInfo *coder,
                 goto skip;
             }
 
-        if (mode == JOINT_MS)
+        if (mode == JOINT_MS || mode == JOINT_MIXED)
         {
             channel[chn].common_window = 1;
             channel[chn].msInfo.is_present = 1;
@@ -380,6 +487,9 @@ void AACstereo(CoderInfo *coder,
                 break;
             case JOINT_IS:
                 stereo(coder + chn, coder + rch, s[chn], s[rch], &sfcnt, start, end, isthr);
+                break;
+            case JOINT_MIXED:
+                mixed_mode(coder + chn, coder + rch, channel + chn, s[chn], s[rch], &sfcnt, start, end, quality);
                 break;
             }
             start = end;
