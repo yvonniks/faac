@@ -44,7 +44,7 @@ Copyright (c) 1997.
 /* Auto-mode thresholds */
 #define TNS_GAIN_AUTO_SHORT  1.2
 #define TNS_GAIN_AUTO_LONG   2.0
-#define TNS_GAIN_AUTO_HIGH   1.4
+#define TNS_GAIN_AUTO_HIGH   1.6
 #define TNS_GAIN_INITIAL     1.4
 
 /***********************************************/
@@ -145,7 +145,6 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
 {
     int numberOfWindows,windowSize;
     int startBand,stopBand,order;    /* Bands over which to apply TNS */
-    int lengthInBands = 0; (void)lengthInBands;               /* Length to filter, in bands */
     int w, i;
     int startIndex,length;
     faac_real gain;
@@ -204,13 +203,13 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
 
         if (length <= 0) continue;
 
-        /* Energy early-exit */
+        /* Energy early-exit: skip very quiet blocks to save CPU */
         faac_real energy = 0.0;
         for (i = 0; i < length; i++) {
             faac_real s = spec[startIndex + i];
             energy += s * s;
         }
-        if (energy < (faac_real)length * 0.01) continue;
+        if (energy < (faac_real)length * 0.02) continue;
 
         gain = LevinsonDurbin(order,length,&spec[startIndex],k);
 
@@ -220,7 +219,7 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
             if (blockType == ONLY_SHORT_WINDOW) {
                 threshold = TNS_GAIN_AUTO_SHORT;
             } else {
-                if (br_per_ch < TNS_BR_MID) threshold = TNS_GAIN_AUTO_LONG * 1.2;
+                if (br_per_ch < TNS_BR_MID) threshold = 2.4;
                 else if (br_per_ch < TNS_BR_HIGH) threshold = TNS_GAIN_AUTO_LONG;
                 else threshold = TNS_GAIN_AUTO_HIGH;
             }
@@ -261,7 +260,7 @@ void TnsEncode(TnsInfo* tnsInfo,       /* TNS info */
                 for (i=1; i<=truncatedOrder; i++) {
                     error *= (1.0 - k_quant[i] * k_quant[i]);
                 }
-                pred_gain = (error > 0.0) ? 1.0 / error : 100.0;
+                pred_gain = (error > 0.0) ? (1.0 / error) : 100.0;
 
                 if (pred_gain > threshold && truncatedOrder > 1) {
                     int target_order = truncatedOrder;
@@ -355,7 +354,7 @@ static void TnsInvFilter(int length,faac_real* spec,TnsFilterData* filter, faac_
     int order=filter->order;
     faac_real* a=filter->aCoeffs;
 
-    if (order >= length) order = length > 0 ? length - 1 : 0;
+    if (order >= length) order = length > 0 ? (length - 1) : 0;
     if (order <= 0) return;
 
     if (filter->direction) {
@@ -416,9 +415,9 @@ static void QuantizeReflectionCoeffs(int fOrder,
                               int* indexArray)
 {
     int i;
-    faac_real iqfac = ((1 << (coeffRes - 1)) - 0.5) / (M_PI / 2.0);
-    faac_real iqfac_m = ((1 << (coeffRes - 1)) + 0.5) / (M_PI / 2.0);
-    int low = -(1 << (coeffRes - 1));
+    /* Standard symmetric mapping: fac = 2^(res-1) / (pi/2) */
+    faac_real fac = (faac_real)(1 << (coeffRes - 1)) / (M_PI / 2.0);
+    int low = -(1 << (coeffRes - 1)) + 1; /* Avoid -1.0 for stability */
     int high = (1 << (coeffRes - 1)) - 1;
 
     for (i=1;i<=fOrder;i++) {
@@ -426,10 +425,10 @@ static void QuantizeReflectionCoeffs(int fOrder,
         if (val > 0.99) val = 0.99;
         if (val < -0.99) val = -0.99;
         val = FAAC_ASIN(val);
-        indexArray[i] = (val >= 0) ? (int)(0.5 + (val * iqfac)) : (int)(-0.5 + (val * iqfac_m));
+        indexArray[i] = FAAC_LRINT(val * fac);
         if (indexArray[i] < low) indexArray[i] = low;
         if (indexArray[i] > high) indexArray[i] = high;
-        kArray[i] = FAAC_SIN((faac_real)indexArray[i] / ((indexArray[i] >= 0) ? iqfac : iqfac_m));
+        kArray[i] = FAAC_SIN((faac_real)indexArray[i] / fac);
     }
 }
 
@@ -512,7 +511,7 @@ static faac_real LevinsonDurbin(int fOrder,          /* Filter order */
             aPtr=aTemp;
         }
         if (error <= 0.0) return 100.0;
-        return signal/error;
+        return (signal > 0.0) ? (signal / error) : 0.0;
     }
 }
 
