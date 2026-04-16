@@ -190,7 +190,19 @@ SBRInfo *SBRInit(int channels, int sampleRate, int coreSampleRate)
      * bs_stop_freq=7 is safe for all rates: worst-case k2-kx=41 ≤ 48.
      * Higher values (e.g. 8) are better quality but rate-dependent. */
     sbr->bs_amp_res    = 0;   /* 1.5 dB amplitude resolution */
-    sbr->bs_start_freq = 15;  /* kx ≈ 31–32 (≈11.6–12 kHz) — just below LC core Nyquist */
+
+    /* Search for bs_start_freq to match kx ≈ 16 (Fs/4 crossover) */
+    int min_diff = 1000;
+    int best_start = 15;
+    for (int i = 0; i < 16; i++) {
+        int kx = compute_kx(sampleRate, i);
+        int diff = abs(kx - 16);
+        if (diff < min_diff) {
+            min_diff = diff;
+            best_start = i;
+        }
+    }
+    sbr->bs_start_freq = best_start;
     sbr->bs_stop_freq  = 14;  /* k2 = 2*kx — full upper-octave SBR extension */
     sbr->bs_xover_band = 0;
 

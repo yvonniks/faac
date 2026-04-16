@@ -824,15 +824,19 @@ int PutBit(BitStream *bitStream,
 {
     if (numBit <= 0)
         return 0;
+
     unsigned int currentBit = (unsigned int)bitStream->currentBit;
     unsigned int bitOffset = currentBit & 7;
     unsigned char *ptr = bitStream->data + (currentBit >> 3);
+
     bitStream->currentBit += numBit;
     bitStream->numBit = bitStream->currentBit;
+
     if (numBit < 32)
         data &= (1UL << numBit) - 1;
     else if (numBit == 32)
         data &= 0xFFFFFFFFUL;
+
     if (bitOffset + numBit <= 8) {
         int shift = 8 - bitOffset - numBit;
         if (bitOffset == 0) *ptr = (unsigned char)(data << shift);
