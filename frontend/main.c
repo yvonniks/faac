@@ -98,7 +98,8 @@ enum flags
     HELP_MP4,
     HELP_ADVANCED,
     OPT_JOINT,
-    OPT_PNS
+    OPT_PNS,
+    OPT_SBR
 };
 
 typedef struct {
@@ -195,6 +196,8 @@ static help_t help_advanced[] = {
     {"--joint 1\tUse Mid/Side coding.\n"},
     {"--joint 2\tUse Intensity Stereo coding.\n"},
     {"--pns <0 .. 10>\tPNS level; 0=disabled.\n"},
+    {"--sbr  \tEnable Pseudo SBR.\n"},
+    {"--no-sbr\tDisable Pseudo SBR.\n"},
     {"--mpeg-vers X\tForce AAC MPEG version, X can be 2 or 4\n"},
     {"--shortctl X\tEnforce block type (0 = both (default); 1 = no short; 2 = no\n"
     "\t\tlong).\n"},
@@ -461,6 +464,7 @@ int main(int argc, char *argv[])
     int rawEndian = 1;
 
     int shortctl = SHORTCTL_NORMAL;
+    int useSbr = 1;
 
     FILE *outfile = NULL;
 
@@ -524,6 +528,8 @@ int main(int argc, char *argv[])
             {"raw", 0, 0, 'r'},
             {"joint", required_argument, 0, OPT_JOINT},
             {"pns", required_argument, 0, OPT_PNS},
+            {"sbr", 0, 0, OPT_SBR},
+            {"no-sbr", 0, 0, 'n'},
             {"cutoff", 1, 0, 'c'},
             {"quality", 1, 0, 'q'},
             {"pcmraw", 0, 0, 'P'},
@@ -790,6 +796,12 @@ int main(int argc, char *argv[])
         case OPT_JOINT:
             jointmode = atoi(optarg);
             break;
+        case OPT_SBR:
+            useSbr = 1;
+            break;
+        case 'n':
+            useSbr = 0;
+            break;
         case OPT_PNS:
             pnslevel = atoi(optarg);
             break;
@@ -920,6 +932,7 @@ int main(int argc, char *argv[])
     myFormat->aacObjectType = objectType;
     myFormat->mpegVersion = mpegVersion;
     myFormat->useTns = useTns;
+    myFormat->useSbr = useSbr;
     switch (shortctl)
     {
     case SHORTCTL_NOSHORT:

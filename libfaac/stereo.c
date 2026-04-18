@@ -45,7 +45,7 @@ static void stereo(CoderInfo *cl, CoderInfo *cr,
 
     (*sfcnt) += sfmin;
 
-    for (sfb = sfmin; sfb < cl->sfbn; sfb++)
+    for (sfb = sfmin; sfb < cl->sfbn_native; sfb++)
     {
         int l, start, end;
         faac_real sum, diff;
@@ -168,7 +168,7 @@ static void midside(CoderInfo *coder, ChannelInfo *channel,
         channel->msInfo.ms_used[*sfcnt] = 0;
         (*sfcnt)++;
     }
-    for (sfb = sfmin; sfb < coder->sfbn; sfb++)
+    for (sfb = sfmin; sfb < coder->sfbn_native; sfb++)
     {
         int ms = 0;
         int l, start, end;

@@ -231,6 +231,16 @@ static void qlevel(CoderInfo * __restrict coderInfo,
       etot = bandenrg[sb] / (faac_real)gsize;
       rmsx = FAAC_SQRT(etot / (end - start));
 
+      if (sb >= coderInfo->sfbn_native)
+      {
+          int nsfb = end - start;
+          coderInfo->book[coderInfo->bandcnt] = HCB_PNS;
+          coderInfo->sf[coderInfo->bandcnt] =
+              100 + FAAC_LRINT(FAAC_LOG10(etot / nsfb + 1e-6) * (0.5 * sfstep));
+          coderInfo->bandcnt++;
+          continue;
+      }
+
       if ((rmsx < NOISEFLOOR) || (!bandqual[sb]))
       {
           coderInfo->book[coderInfo->bandcnt++] = HCB_ZERO;
