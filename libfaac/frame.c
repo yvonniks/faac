@@ -227,6 +227,16 @@ int FAACAPI faacEncSetConfiguration(faacEncHandle hpEncoder,
 
     hEncoder->config.quantqual = config->quantqual;
 
+    if (config->pnslevel == -1)
+    {
+        if (config->bandWidth <= 8000)
+            config->pnslevel = 8;
+        else if (config->bandWidth >= 15000)
+            config->pnslevel = 4;
+        else
+            config->pnslevel = 8 - (int)((config->bandWidth - 8000) / 1750);
+    }
+
     if (config->mpegVersion == MPEG2)
         config->pnslevel = 0;
     if (config->pnslevel < 0)
@@ -240,6 +250,8 @@ int FAACAPI faacEncSetConfiguration(faacEncHandle hpEncoder,
               hEncoder->sampleRate,
               hEncoder->srInfo,
               &hEncoder->aacquantCfg);
+
+
 
     // reset psymodel
     hEncoder->psymodel->PsyEnd(&hEncoder->gpsyInfo, hEncoder->psyInfo, hEncoder->numChannels);
@@ -293,7 +305,7 @@ faacEncHandle FAACAPI faacEncOpen(unsigned long sampleRate,
     hEncoder->config.mpegVersion = MPEG4;
     hEncoder->config.aacObjectType = LOW;
     hEncoder->config.jointmode = JOINT_IS;
-    hEncoder->config.pnslevel = 4;
+    hEncoder->config.pnslevel = -1;
     hEncoder->config.useLfe = 1;
     hEncoder->config.useTns = 0;
     hEncoder->config.bitRate = 64000;
