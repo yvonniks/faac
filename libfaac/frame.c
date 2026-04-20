@@ -48,6 +48,25 @@ static char *libCopyright =
   " Copyright (C) 2002,2003,2017  Krzysztof Nikiel\n"
   "This software is based on the ISO MPEG-4 reference source code.\n";
 
+/*
+ * PseudoSBR constants.
+ *
+ * PSEUDO_SBR_MAX_BITRATE: per-channel ceiling in bps.  Chosen to coincide
+ * with the existing CalcBandwidth() segment-3/4 boundary (64 kbps/ch),
+ * above which the encoder is already in "high-fidelity" territory and
+ * bandwidth reduction is counterproductive.
+ *
+ * PSEUDO_SBR_MIN_BW_PCT: bandwidth percentage applied at the lowest
+ * bitrates.  Derived from the faac-benchmark sweep in RESEARCH.md §2;
+ * the value that maximised average MOS delta across low-bitrate scenarios
+ * without regressing music_std / music_high.
+ */
+#define PSEUDO_SBR_MAX_BITRATE 64000
+#define PSEUDO_SBR_MIN_BW_PCT  70
+/* Amplitude scale for folded content (percent).  Upper harmonics are
+ * typically 10-20 dB lower than the fundamental region; 25% ≈ 12 dB. */
+#define PSEUDO_SBR_FOLD_SCALE  25
+
 static const psymodellist_t psymodellist[] = {
   {&psymodel2, "knipsycho psychoacoustic"},
   {NULL}
@@ -153,6 +172,7 @@ int FAACAPI faacEncSetConfiguration(faacEncHandle hpEncoder,
     hEncoder->config.jointmode = config->jointmode;
     hEncoder->config.useLfe = config->useLfe;
     hEncoder->config.useTns = config->useTns;
+    hEncoder->config.usePseudoSBR = config->usePseudoSBR;
     hEncoder->config.aacObjectType = config->aacObjectType;
     hEncoder->config.mpegVersion = config->mpegVersion;
     hEncoder->config.outputFormat = config->outputFormat;
@@ -296,6 +316,7 @@ faacEncHandle FAACAPI faacEncOpen(unsigned long sampleRate,
     hEncoder->config.pnslevel = 4;
     hEncoder->config.useLfe = 1;
     hEncoder->config.useTns = 0;
+    hEncoder->config.usePseudoSBR = 0;
     hEncoder->config.bitRate = 64000;
     hEncoder->config.bandWidth = CalcBandwidth(hEncoder->config.bitRate, sampleRate);
     hEncoder->config.quantqual = 0;
@@ -539,6 +560,42 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
             hEncoder->freqBuff[channel],
             hEncoder->overlapBuff[channel],
             MOVERLAPPED);
+    }
+
+    /* PseudoSBR — Strategy S: spectral folding.
+     * Mirror the MDCT coefficients just below the fold point into the
+     * upper region that would otherwise carry near-zero energy at low
+     * bitrates.  Only applied to long-window blocks (short windows have a
+     * different interleaved layout and are skipped for the first pass).
+     * The fold point is the same linear taper used in Strategies A/A+Q:
+     * PSEUDO_SBR_MIN_BW_PCT% of natural BW at 0 bps, 100% at threshold.
+     * PSEUDO_SBR_FOLD_SCALE attenuates the mirrored content to approximate
+     * the lower energy of natural high-frequency material. */
+    if (hEncoder->config.usePseudoSBR &&
+        hEncoder->config.bitRate > 0 &&
+        hEncoder->config.bitRate < PSEUDO_SBR_MAX_BITRATE)
+    {
+        int bw_pct = PSEUDO_SBR_MIN_BW_PCT +
+            (100 - PSEUDO_SBR_MIN_BW_PCT) *
+            hEncoder->config.bitRate / PSEUDO_SBR_MAX_BITRATE;
+        /* Convert Hz → long-window MDCT bin index */
+        int fold_bin = (int)((unsigned long)bandWidth * bw_pct / 100
+                             * 2 * FRAME_LEN / hEncoder->sampleRate);
+        int end_bin  = (int)((unsigned long)bandWidth
+                             * 2 * FRAME_LEN / hEncoder->sampleRate);
+
+        for (channel = 0; channel < numChannels; channel++) {
+            /* Skip short-window blocks — different interleaved layout */
+            if (coderInfo[channel].block_type == ONLY_SHORT_WINDOW)
+                continue;
+            for (int k = 0; fold_bin + k < end_bin; k++) {
+                int src = fold_bin - k - 1;
+                if (src < 0) break;
+                hEncoder->freqBuff[channel][fold_bin + k] =
+                    hEncoder->freqBuff[channel][src]
+                    * PSEUDO_SBR_FOLD_SCALE / 100;
+            }
+        }
     }
 
     for (channel = 0; channel < numChannels; channel++) {
