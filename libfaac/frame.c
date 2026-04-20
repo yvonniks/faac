@@ -116,16 +116,32 @@ int FAACAPI faacEncGetDecoderSpecificInfo(faacEncHandle hpEncoder,unsigned char*
         return -2; /* not supported */
     }
 
-    *pSizeOfDecoderSpecificInfo = 2;
-    *ppBuffer = malloc(2);
+    if (hEncoder->config.aacObjectType == HE_AAC) {
+        *pSizeOfDecoderSpecificInfo = 5;
+    } else {
+        *pSizeOfDecoderSpecificInfo = 2;
+    }
+    *ppBuffer = malloc(*pSizeOfDecoderSpecificInfo);
 
     if(*ppBuffer != NULL){
 
         memset(*ppBuffer,0,*pSizeOfDecoderSpecificInfo);
         pBitStream = OpenBitStream(*pSizeOfDecoderSpecificInfo, *ppBuffer);
-        PutBit(pBitStream, hEncoder->config.aacObjectType, 5);
-        PutBit(pBitStream, hEncoder->sampleRateIdx, 4);
-        PutBit(pBitStream, hEncoder->numChannels, 4);
+        if (hEncoder->config.aacObjectType == HE_AAC) {
+            PutBit(pBitStream, 5, 5); /* HE-AAC signaling */
+            PutBit(pBitStream, hEncoder->sampleRateIdx, 4);
+            PutBit(pBitStream, hEncoder->numChannels, 4);
+
+            /* Extension: AAC-LC at half rate */
+            PutBit(pBitStream, 0x2b7, 11); /* extensionSyncword */
+            PutBit(pBitStream, 2, 5); /* AAC-LC */
+            PutBit(pBitStream, 1, 1); /* sbrPresentFlag */
+            PutBit(pBitStream, hEncoder->sampleRateIdx, 4); /* Extension sampling frequency index */
+        } else {
+            PutBit(pBitStream, hEncoder->config.aacObjectType, 5);
+            PutBit(pBitStream, hEncoder->sampleRateIdx, 4);
+            PutBit(pBitStream, hEncoder->numChannels, 4);
+        }
         CloseBitStream(pBitStream);
 
         return 0;
@@ -174,7 +190,7 @@ int FAACAPI faacEncSetConfiguration(faacEncHandle hpEncoder,
             break;
     }
 
-    if (hEncoder->config.aacObjectType != LOW)
+    if (hEncoder->config.aacObjectType != LOW && hEncoder->config.aacObjectType != HE_AAC)
         return 0;
 
     /* Re-init TNS for new profile */
@@ -256,6 +272,16 @@ int FAACAPI faacEncSetConfiguration(faacEncHandle hpEncoder,
 	/* load channel_map */
 	for( i = 0; i < MAX_CHANNELS; i++ )
 		hEncoder->config.channel_map[i] = config->channel_map[i];
+
+    /* HE-AAC specific setup */
+    if (hEncoder->config.aacObjectType == HE_AAC) {
+        if (!hEncoder->resampler) {
+            hEncoder->resampler = ResampleOpen(hEncoder->numChannels);
+        }
+        if (!hEncoder->sbrInfo) {
+            hEncoder->sbrInfo = SBRInit(hEncoder->numChannels, hEncoder->sampleRate, hEncoder->config.bandWidth);
+        }
+    }
 
     /* OK */
     return 1;
@@ -370,8 +396,11 @@ int FAACAPI faacEncClose(faacEncHandle hpEncoder)
     }
 
     /* Free handle */
-    if (hEncoder)
+    if (hEncoder) {
+        if (hEncoder->resampler) ResampleClose(hEncoder->resampler);
+        if (hEncoder->sbrInfo) SBREnd(hEncoder->sbrInfo);
 		FreeMemory(hEncoder);
+    }
 
     BlocStat();
 
@@ -506,6 +535,23 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
 
     if (hEncoder->frameNum <= 3) /* Still filling up the buffers */
         return 0;
+
+    /* HE-AAC SBR Analysis and Resampling */
+    if (hEncoder->config.aacObjectType == HE_AAC) {
+        faac_real *resampled[MAX_CHANNELS];
+        for (channel = 0; channel < numChannels; channel++) {
+            resampled[channel] = AllocMemory(FRAME_LEN * sizeof(faac_real));
+        }
+
+        SBRAnalysis(hEncoder->sbrInfo, hEncoder->sampleBuff, numChannels);
+        Resample2to1(hEncoder->resampler, hEncoder->sampleBuff, FRAME_LEN / 2, resampled);
+
+        for (channel = 0; channel < numChannels; channel++) {
+            memcpy(hEncoder->sampleBuff[channel], resampled[channel], (FRAME_LEN / 2) * sizeof(faac_real));
+            memset(hEncoder->sampleBuff[channel] + (FRAME_LEN / 2), 0, (FRAME_LEN / 2) * sizeof(faac_real));
+            FreeMemory(resampled[channel]);
+        }
+    }
 
     /* Psychoacoustics */
     hEncoder->psymodel->PsyCalculate(channelInfo, &hEncoder->gpsyInfo, hEncoder->psyInfo,

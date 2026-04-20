@@ -33,6 +33,7 @@
 #define LOW  2
 #define SSR  3
 #define LTP  4
+#define HE_AAC 5
 
 /* Input Formats */
 #define FAAC_INPUT_NULL    0

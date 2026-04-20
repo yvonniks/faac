@@ -36,6 +36,8 @@ extern "C" {
 #include "blockswitch.h"
 #include "fft.h"
 #include "quantize.h"
+#include "resample.h"
+#include "sbr.h"
 
 #include <faaccfg.h>
 
@@ -83,6 +85,10 @@ typedef struct {
 
     /* quantizer specific config */
     AACQuantCfg aacquantCfg;
+
+    /* Resampler and SBR */
+    Resampler *resampler;
+    SBRInfo *sbrInfo;
 
     /* FFT Tables */
     FFT_Tables	fft_tables;
