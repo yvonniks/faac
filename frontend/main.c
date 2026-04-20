@@ -77,6 +77,7 @@ enum flags
 {
     SHORTCTL_FLAG = 300,
     MPEGVERS_FLAG,
+    OBJTYPE_FLAG,
     ARTIST_FLAG,
     ARTIST_SORT_FLAG,
     TITLE_FLAG,
@@ -195,7 +196,8 @@ static help_t help_advanced[] = {
     {"--joint 1\tUse Mid/Side coding.\n"},
     {"--joint 2\tUse Intensity Stereo coding.\n"},
     {"--pns <0 .. 10>\tPNS level; 0=disabled.\n"},
-    {"--mpeg-vers X\tForce AAC MPEG version, X can be 2 or 4\n"},
+    {"--mpeg-vers X\tForce AAC MPEG version: 2=MPEG2, 4=MPEG4 (default)\n"},
+    {"--object-type X\tForce AAC object type: lc, he-aac, or auto (default)\n"},
     {"--shortctl X\tEnforce block type (0 = both (default); 1 = no short; 2 = no\n"
     "\t\tlong).\n"},
     {0}
@@ -431,7 +433,7 @@ int main(int argc, char *argv[])
 
     faacEncConfigurationPtr myFormat;
     unsigned int mpegVersion = MPEG4;
-    unsigned int objectType = LOW;
+    unsigned int objectType = AAC_AUTO;
     int jointmode = -1;
     int pnslevel = -1;
     static int useTns = 0;
@@ -534,6 +536,7 @@ int main(int argc, char *argv[])
             {"tns", 0, &useTns, 1},
             {"no-tns", 0, &useTns, 0},
             {"mpeg-version", 1, 0, MPEGVERS_FLAG},
+            {"object-type", 1, 0, OBJTYPE_FLAG},
             {"license", 0, 0, 'L'},
             {"createmp4", 0, 0, 'w'},
             {"artist", 1, 0, ARTIST_FLAG},
@@ -755,8 +758,9 @@ int main(int argc, char *argv[])
             shortctl = atoi(optarg);
             break;
         case MPEGVERS_FLAG:
-            mpegVersion = atoi(optarg);
-            switch (mpegVersion)
+        {
+            int mpegArg = atoi(optarg);
+            switch (mpegArg)
             {
             case 2:
                 mpegVersion = MPEG2;
@@ -765,8 +769,19 @@ int main(int argc, char *argv[])
                 mpegVersion = MPEG4;
                 break;
             default:
-                dieMessage = "Unrecognised MPEG version!\n";
+                dieMessage = "Unrecognised MPEG version (use 2 or 4)!\n";
             }
+            break;
+        }
+        case OBJTYPE_FLAG:
+            if (!strcmp(optarg, "lc"))
+                objectType = LOW;
+            else if (!strcmp(optarg, "he-aac") || !strcmp(optarg, "heaac"))
+                objectType = HE_AAC;
+            else if (!strcmp(optarg, "auto"))
+                objectType = AAC_AUTO;
+            else
+                dieMessage = "Unrecognised object type (use lc, he-aac, or auto)!\n";
             break;
         case 'L':
             fprintf(stderr, "%s", faac_copyright_string);
@@ -960,6 +975,29 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    /* Read back the effective object type: AAC_AUTO may have been resolved. */
+    {
+        unsigned int userRequestedType = objectType;
+        objectType = myFormat->aacObjectType;
+        if (userRequestedType == AAC_AUTO)
+            fprintf(stderr, "Auto-selected: %s\n",
+                    objectType == HE_AAC ? "HE-AAC v1" : "Low Complexity");
+    }
+
+    /* HE-AAC requires 2× input samples per frame: the encoder downsamples
+     * 2:1 internally.  Update samplesInput and reallocate the PCM buffer. */
+    if (objectType == HE_AAC) {
+        samplesInput *= 2;
+        frameSize     = samplesInput / infile->channels;
+        delay_samples = frameSize;
+        free(pcmbuf);
+        pcmbuf = (float *) malloc(samplesInput * sizeof(float));
+        if (!pcmbuf) {
+            fprintf(stderr, "Out of memory allocating PCM buffer\n");
+            return 1;
+        }
+    }
+
     /* initialize MP4 creation */
     if (container == MP4_CONTAINER)
     {
@@ -1023,6 +1061,12 @@ int main(int argc, char *argv[])
         break;
     case LTP:
         fprintf(stderr, "LTP");
+        break;
+    case HE_AAC:
+        fprintf(stderr, "HE-AAC v1");
+        break;
+    default:
+        fprintf(stderr, "Unknown");
         break;
     }
     fprintf(stderr, " (MPEG-%d)", (mpegVersion == MPEG4) ? 4 : 2);
