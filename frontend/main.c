@@ -98,7 +98,8 @@ enum flags
     HELP_MP4,
     HELP_ADVANCED,
     OPT_JOINT,
-    OPT_PNS
+    OPT_PNS,
+    OPT_NO_SBR
 };
 
 typedef struct {
@@ -198,6 +199,7 @@ static help_t help_advanced[] = {
     {"--mpeg-vers X\tForce AAC MPEG version, X can be 2 or 4\n"},
     {"--shortctl X\tEnforce block type (0 = both (default); 1 = no short; 2 = no\n"
     "\t\tlong).\n"},
+    {"--no-sbr\tDisable pseudo-SBR spectral extension (on by default at low bitrates).\n"},
     {0}
 };
 
@@ -435,6 +437,7 @@ int main(int argc, char *argv[])
     int jointmode = -1;
     int pnslevel = -1;
     static int useTns = 0;
+    static int usePseudoSBR = 1;
     enum container_format container = NO_CONTAINER;
     enum stream_format stream = ADTS_STREAM;
     int cutOff = -1;
@@ -533,6 +536,7 @@ int main(int argc, char *argv[])
             {"shortctl", 1, 0, SHORTCTL_FLAG},
             {"tns", 0, &useTns, 1},
             {"no-tns", 0, &useTns, 0},
+            {"no-sbr", 0, &usePseudoSBR, 0},
             {"mpeg-version", 1, 0, MPEGVERS_FLAG},
             {"license", 0, 0, 'L'},
             {"createmp4", 0, 0, 'w'},
@@ -920,6 +924,7 @@ int main(int argc, char *argv[])
     myFormat->aacObjectType = objectType;
     myFormat->mpegVersion = mpegVersion;
     myFormat->useTns = useTns;
+    myFormat->usePseudoSBR = usePseudoSBR;
     switch (shortctl)
     {
     case SHORTCTL_NOSHORT:
@@ -1039,6 +1044,13 @@ int main(int argc, char *argv[])
     }
     if (myFormat->pnslevel > 0)
         fprintf(stderr, " + PNS");
+
+    /* Only show Pseudo-SBR when it will actually fire: enabled
+       and natural bandwidth below 95% of Nyquist (the in-encoder threshold). */
+    if (myFormat->usePseudoSBR &&
+            myFormat->bandWidth * 100u < (infile->samplerate / 2u) * 100u)
+        fprintf(stderr, " + Pseudo-SBR");
+
     fprintf(stderr, "\n");
 
     fprintf(stderr, "Container format: ");

@@ -32,6 +32,7 @@
 #include "util.h"
 #include "tns.h"
 #include "stereo.h"
+#include "pseudo_sbr.h"
 
 #if (defined WIN32 || defined _WIN32 || defined WIN64 || defined _WIN64) && !defined(PACKAGE_VERSION)
 #include "win32_ver.h"
@@ -153,6 +154,7 @@ int FAACAPI faacEncSetConfiguration(faacEncHandle hpEncoder,
     hEncoder->config.jointmode = config->jointmode;
     hEncoder->config.useLfe = config->useLfe;
     hEncoder->config.useTns = config->useTns;
+    hEncoder->config.usePseudoSBR = config->usePseudoSBR;
     hEncoder->config.aacObjectType = config->aacObjectType;
     hEncoder->config.mpegVersion = config->mpegVersion;
     hEncoder->config.outputFormat = config->outputFormat;
@@ -296,6 +298,12 @@ faacEncHandle FAACAPI faacEncOpen(unsigned long sampleRate,
     hEncoder->config.pnslevel = 4;
     hEncoder->config.useLfe = 1;
     hEncoder->config.useTns = 0;
+    hEncoder->config.usePseudoSBR = 1;
+
+    /* Seed deterministically from sampleRate: same rate → same noise sequence
+       → reproducible bitstream / stable MD5. */
+    hEncoder->sbrRandState = 0xDEADBEEFu ^ (uint32_t)(sampleRate * 31337u);
+
     hEncoder->config.bitRate = 64000;
     hEncoder->config.bandWidth = CalcBandwidth(hEncoder->config.bitRate, sampleRate);
     hEncoder->config.quantqual = 0;
@@ -569,6 +577,32 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
         }
     }
 
+    /* Pseudo-SBR: synthesise spectral content above the natural bandwidth.
+       Only fires when naturalBW < 100% Nyquist (low bitrates/VBR limited BW).
+       Placed after FilterBank() and before TnsEncode/BlocQuant so the synthesized
+       bands get analyzed and processed as part of the normal pipeline. */
+    if (hEncoder->config.usePseudoSBR) {
+        unsigned int naturalBW = hEncoder->config.bandWidth;
+        if (PseudoSBRShouldEnable(naturalBW, hEncoder->sampleRate,
+                                   hEncoder->config.bitRate)) {
+            unsigned int targetBW = PseudoSBRTargetBW(naturalBW,
+                hEncoder->sampleRate, hEncoder->config.bitRate);
+            if (targetBW > naturalBW + SBR_MIN_EXTENSION) {
+                for (channel = 0; channel < numChannels; channel++) {
+                    if (channelInfo[channel].type != ELEMENT_LFE) {
+                        PseudoSBR(&coderInfo[channel],
+                                   hEncoder->freqBuff[channel],
+                                   hEncoder->sampleRate,
+                                   naturalBW, targetBW,
+                                   hEncoder->config.bitRate,
+                                   hEncoder->srInfo,
+                                   &hEncoder->sbrRandState);
+                    }
+                }
+            }
+        }
+    }
+
     /* Perform TNS analysis and filtering */
     for (channel = 0; channel < numChannels; channel++) {
         if ((channelInfo[channel].type != ELEMENT_LFE) && (useTns)) {
@@ -594,11 +628,6 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
     AACstereo(coderInfo, channelInfo, hEncoder->freqBuff, numChannels,
               (faac_real)hEncoder->aacquantCfg.quality/DEFQUAL, jointmode);
 
-    for (channel = 0; channel < numChannels; channel++) {
-        BlocQuant(&coderInfo[channel], hEncoder->freqBuff[channel],
-                  &(hEncoder->aacquantCfg));
-    }
-
     // fix max_sfb in CPE mode
     for (channel = 0; channel < numChannels; channel++)
     {
@@ -607,13 +636,41 @@ int FAACAPI faacEncEncode(faacEncHandle hpEncoder,
 				&& (channelInfo[channel].ch_is_left))
 		{
 			CoderInfo *cil, *cir;
+            int sb;
+            unsigned int offset;
 
 			cil = &coderInfo[channel];
 			cir = &coderInfo[channelInfo[channel].paired_ch];
 
-                        cil->sfbn = cir->sfbn = max(cil->sfbn, cir->sfbn);
+            if (cil->sfbn < cir->sfbn) {
+                cil->sfbn = cir->sfbn;
+                offset = cil->sfb_offset[0];
+                for (sb = 0; sb < cil->sfbn; sb++) {
+                    if (cil->block_type == ONLY_SHORT_WINDOW)
+                        offset += hEncoder->srInfo->cb_width_short[sb];
+                    else
+                        offset += hEncoder->srInfo->cb_width_long[sb];
+                    cil->sfb_offset[sb + 1] = offset;
+                }
+            } else if (cir->sfbn < cil->sfbn) {
+                cir->sfbn = cil->sfbn;
+                offset = cir->sfb_offset[0];
+                for (sb = 0; sb < cir->sfbn; sb++) {
+                    if (cir->block_type == ONLY_SHORT_WINDOW)
+                        offset += hEncoder->srInfo->cb_width_short[sb];
+                    else
+                        offset += hEncoder->srInfo->cb_width_long[sb];
+                    cir->sfb_offset[sb + 1] = offset;
+                }
+            }
 		}
     }
+
+    for (channel = 0; channel < numChannels; channel++) {
+        BlocQuant(&coderInfo[channel], hEncoder->freqBuff[channel],
+                  &(hEncoder->aacquantCfg));
+    }
+
     /* Write the AAC bitstream */
     bitStream = OpenBitStream(bufferSize, outputBuffer);
 
