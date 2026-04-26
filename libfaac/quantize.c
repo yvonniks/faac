@@ -96,6 +96,16 @@ static faac_real gain_with_overflow_clamp(int *sfac, faac_real band_peak)
 }
 
 #define NOISEFLOOR 0.4
+#define NOISETONE 0.2
+#define AVGE_FLOOR_RATIO 0.005
+#define MAXE_FLOOR_RATIO 0.02
+
+static faac_real compute_target_base(faac_real avge, faac_real maxe, faac_real avgenrg, faac_real powm)
+{
+    faac_real target = NOISETONE * FAAC_POW(avge / avgenrg, powm);
+    target += (1.0 - NOISETONE) * 0.45 * FAAC_POW(maxe / avgenrg, powm);
+    return target;
+}
 
 // band sound masking
 static void bmask(CoderInfo * __restrict coderInfo, faac_real * __restrict xr0, faac_real * __restrict bandqual,
@@ -162,29 +172,26 @@ static void bmask(CoderInfo * __restrict coderInfo, faac_real * __restrict xr0, 
     bandmaxe[sfb] = FAAC_SQRT(maxe);
     maxe *= gsize;
 
-#define NOISETONE 0.2
+    faac_real band_scale;
+    faac_real block_factor = 1.0;
+
     if (coderInfo->block_type == ONLY_SHORT_WINDOW)
     {
         last = BLOCK_LEN_SHORT;
-        avgenrg = totenrg / last;
-        avgenrg *= end - start;
-
-        target = NOISETONE * FAAC_POW(avge/avgenrg, powm);
-        target += (1.0 - NOISETONE) * 0.45 * FAAC_POW(maxe/avgenrg, powm);
-
-        target *= 1.5;
+        block_factor = 1.5;
     }
     else
     {
         last = BLOCK_LEN_LONG;
-        avgenrg = totenrg / last;
-        avgenrg *= end - start;
-
-        target = NOISETONE * FAAC_POW(avge/avgenrg, powm);
-        target += (1.0 - NOISETONE) * 0.45 * FAAC_POW(maxe/avgenrg, powm);
     }
 
-    target *= 10.0 / (1.0 + ((faac_real)(start+end)/last));
+    avgenrg = totenrg / last;
+    avgenrg *= end - start;
+
+    band_scale = 10.0 / (1.0 + ((faac_real)(start + end) / last));
+
+    target = compute_target_base(avge, maxe, avgenrg, powm);
+    target *= band_scale * block_factor;
 
     /* Floor the band/frame energy ratio so target doesn't collapse on quiet
      * upper bands. Without this, target ends up ~5 decades below rmsx at
@@ -193,14 +200,12 @@ static void bmask(CoderInfo * __restrict coderInfo, faac_real * __restrict xr0, 
      * never trips SF_MIN. Floor at -23 dB (avge) / -17 dB (maxe) below
      * avgenrg keeps the band alive at coarse precision. */
     {
-        faac_real avge_floor = avgenrg * (faac_real)0.005;  /* -23 dB below avg */
+        faac_real avge_floor = avgenrg * (faac_real)AVGE_FLOOR_RATIO;
         faac_real avge_eff = avge > avge_floor ? avge : avge_floor;
-        faac_real maxe_floor = avgenrg * (faac_real)0.02;
+        faac_real maxe_floor = avgenrg * (faac_real)MAXE_FLOOR_RATIO;
         faac_real maxe_eff = maxe > maxe_floor ? maxe : maxe_floor;
-        faac_real target_floor = NOISETONE * FAAC_POW(avge_eff/avgenrg, powm);
-        target_floor += (1.0 - NOISETONE) * 0.45 * FAAC_POW(maxe_eff/avgenrg, powm);
-        target_floor *= 10.0 / (1.0 + ((faac_real)(start+end)/last));
-        if (coderInfo->block_type == ONLY_SHORT_WINDOW) target_floor *= 1.5;
+        faac_real target_floor = compute_target_base(avge_eff, maxe_eff, avgenrg, powm);
+        target_floor *= band_scale * block_factor;
         if (target < target_floor) target = target_floor;
     }
 
